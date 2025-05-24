@@ -1,8 +1,10 @@
-import { Component } from '@angular/core';
+import {Component, HostListener} from '@angular/core';
+import { IssueSidebarComponent } from './issue-sidebar.component';
 
 @Component({
   selector: 'app-issues',
-  imports: [],
+  standalone: true,
+  imports: [IssueSidebarComponent],
   templateUrl: './issues.component.html',
   styleUrl: './issues.component.css'
 })
