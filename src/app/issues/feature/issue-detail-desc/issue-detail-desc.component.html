@@ -1,0 +1,168 @@
+<div class="issue-detail-container">
+  <div *ngIf="isLoading()" class="loading-indicator">
+    <p>Loading issue details...</p>
+  </div>
+  <div *ngIf="errorMessage()" class="error-message">
+    <p>{{ errorMessage() }}</p>
+  </div>
+
+  <div *ngIf="issueDetails(); let issue" class="issue-content">
+    <div class="issue-header">
+      <div class="issue-title">
+        <h1>#{{ issue.id }} {{ issue.title }}</h1>
+      </div>
+      <div class="issue-meta">
+        <span
+          >Created by: <strong>{{ issue.creator.username }}</strong> on
+          {{ issue.createdAt | date : "medium" }}</span
+        >
+        <span>Last updated: {{ issue.updatedAt | date : "medium" }}</span>
+      </div>
+      <div class="issue-tags">
+        <span *ngIf="issue.tags.length === 0" class="no-tags">Add tag +</span>
+        <div *ngIf="issue.tags.length > 0" class="tags-list">
+          <span *ngFor="let tag of issue.tags" class="tag-item">{{ tag }}</span>
+          <span class="add-tag-button">+</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="issue-description">
+      <h3>Description</h3>
+      <div *ngIf="issue.description; else noDescription">
+        <p>{{ issue.description }}</p>
+      </div>
+      <ng-template #noDescription>
+        <p class="no-content">No description provided for this issue.</p>
+      </ng-template>
+    </div>
+
+    <div class="issue-attributes">
+      <div class="attribute-item">
+        <strong>Status</strong>
+        <span>{{ issue.status.name || "N/A" }}</span>
+      </div>
+      <div class="attribute-item">
+        <strong>Type</strong>
+        <span>{{ issue.issueType.name || "N/A" }}</span>
+      </div>
+      <div class="attribute-item">
+        <strong>Severity</strong>
+        <span>{{ issue.severity.name || "N/A" }}</span>
+      </div>
+      <div class="attribute-item">
+        <strong>Priority</strong>
+        <span>{{ issue.priority.name || "N/A" }}</span>
+      </div>
+      <div class="attribute-item">
+        <strong>Assignee</strong>
+        <span>{{ issue.assignee?.username || "Unassigned" }}</span>
+      </div>
+      <div class="attribute-item">
+        <strong>Deadline</strong>
+        <span>{{
+          issue.deadline ? (issue.deadline | date : "medium") : "No deadline"
+        }}</span>
+      </div>
+      <div class="attribute-item">
+        <strong>Watchers</strong>
+        <span>
+          <ng-container *ngIf="issue.watchers.length > 0; else noWatchers">
+            <span *ngFor="let watcher of issue.watchers; let last = last">
+              {{ watcher.username }}{{ !last ? ", " : "" }}
+            </span>
+          </ng-container>
+          <ng-template #noWatchers> None </ng-template>
+        </span>
+      </div>
+    </div>
+
+    <div class="comments-section">
+      <h3>Comments ({{ issue.comments.length }})</h3>
+      <div *ngIf="issue.comments.length > 0; else noComments">
+        <div *ngFor="let comment of issue.comments" class="comment-item">
+          <div class="comment-author-date">
+            <img [src]="comment.author.avatarUrl" alt="Avatar" class="avatar" />
+            <strong>{{ comment.author.username }}</strong> commented on
+            {{ comment.createdAt | date : "medium" }}
+          </div>
+          <div class="comment-text">
+            <p>{{ comment.text }}</p>
+          </div>
+        </div>
+      </div>
+      <ng-template #noComments>
+        <p class="no-content">No comments yet. Be the first to comment!</p>
+      </ng-template>
+
+      <div class="add-comment-form mt-4">
+        <h4>Add a Comment</h4>
+        <form (ngSubmit)="onCommentSubmit()">
+          <textarea
+            name="comment_text"
+            placeholder="Type a new comment here..."
+            [(ngModel)]="newCommentText"
+            required
+          ></textarea>
+          <button type="submit" [disabled]="isLoading() || !newCommentText()">
+            Post Comment
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <div class="attachments-section">
+      <h3>Attachments ({{ issue.attachments.length }})</h3>
+      <div *ngIf="issue.attachments.length > 0; else noAttachments">
+        <div
+          *ngFor="let attachment of issue.attachments"
+          class="attachment-item"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            fill="currentColor"
+            class="bi bi-paperclip"
+            viewBox="0 0 16 16"
+          >
+            <path
+              d="M4.5 3a2.5 2.5 0 0 1 5 0v9a3.5 3.5 0 0 1-7 0V5a2.5 2.5 0 0 1 5 0v7a1.5 1.5 0 0 1-3 0V5a.5.5 0 0 1 1 0v7a.5.5 0 0 0 1 0V3a1.5 1.5 0 0 0-3 0z"
+            />
+          </svg>
+          <a [href]="attachment.fileUrl" target="_blank">{{
+            attachment.fileName
+          }}</a>
+          <small class="ms-2 text-muted"
+            >({{ attachment.uploadedAt | date : "mediumDate" }})</small
+          >
+        </div>
+      </div>
+      <ng-template #noAttachments>
+        <p class="no-content">No attachments for this issue.</p>
+      </ng-template>
+
+      <div class="add-attachment-form mt-4">
+        <h4>Add Attachment</h4>
+        <div class="drop-area">
+          <input
+            type="file"
+            id="attachmentInput"
+            (change)="onFileSelected($event)"
+            accept="*"
+          />
+          <p>Drop attachments here or click to select</p>
+          <div *ngIf="selectedFile()" class="selected-file">
+            Selected: {{ selectedFile()?.name }}
+          </div>
+          <button
+            (click)="onAttachmentUpload()"
+            [disabled]="isLoading() || !selectedFile()"
+          >
+            Upload Attachment
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
