@@ -1,3 +1,32 @@
-<div class="issues-container">
-  <app-issue-sidebar></app-issue-sidebar>
+<div class="issues-container flex">
+
+  <div class="issue-main-content flex-grow p-6" *ngIf="currentIssue$ | async as issue">
+    <h1 class="text-2xl font-bold mb-4">{{ issue.title }}</h1>
+    <p>{{ issue.description }}</p>
+  </div>
+
+  <div class="sidebar-wrapper w-96 flex-shrink-0">
+    <ng-container *ngIf="currentIssue$ | async as issue">
+      <ng-container *ngIf="issueOptions$ | async as options">
+        <ng-container *ngIf="currentUser$ | async as resolvedCurrentUser">
+          <ng-container *ngIf="allProjectUsers$ | async as resolvedAllProjectUsers">
+            <app-issue-sidebar
+              [issue]="issue"
+              [typeOptions]="options.typeOptions"
+              [severityOptions]="options.severityOptions"
+              [priorityOptions]="options.priorityOptions"
+              [statusOptions]="options.statusOptions"
+              [currentUser]="resolvedCurrentUser"
+              [allProjectUsers]="resolvedAllProjectUsers"
+              (issuePropertyChange)="handleIssueUpdate($event)"
+              (deleteIssueInitiated)="handleDeleteIssue($event)"> </app-issue-sidebar>
+          </ng-container>
+        </ng-container>
+      </ng-container>
+    </ng-container>
+  </div>
+
+  <div *ngIf="!(currentIssue$ | async) || !(issueOptions$ | async) || !(currentUser$ | async) || !(allProjectUsers$ | async)">
+    Loading issue details...
+  </div>
 </div>

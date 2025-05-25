@@ -1,69 +1,84 @@
-import { Component, ElementRef, HostListener } from '@angular/core';
+// src/app/issues/feature/issues/issue-sidebar.component.ts
+import {
+  Component,
+  ElementRef,
+  HostListener,
+  Input,
+  Output, // Asegúrate de que Output está importado
+  EventEmitter, // Asegúrate de que EventEmitter está importado
+  OnChanges,
+  SimpleChanges
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
+import {
+  Issue,
+  IssueTypeDetail,
+  SeverityDetail,
+  PriorityDetail,
+  StatusDetail,
+  UserLite
+} from '../../data-access/issue.service';
+import { UserManagementComponent } from '../../ui/user-management/user-management.component';
+
+type IssueFieldWithOptions = 'issue_type' | 'severity' | 'priority' | 'status';
 
 @Component({
   selector: 'app-issue-sidebar',
   standalone: true,
+  imports: [CommonModule, UserManagementComponent],
   templateUrl: './issue-sidebar.component.html',
-  styleUrls: ['./issue-sidebar.component.css'],
-  imports: [CommonModule]
+  styleUrls: ['./issue-sidebar.component.css']
 })
-export class IssueSidebarComponent {
-  // ... (your existing properties: typeOptions, severityOptions, etc.)
-  typeOptions = [
-    { id: 1, value: 'Bug', color: 'bg-red-500' },
-    { id: 2, value: 'Feature', color: 'bg-blue-500' },
-    { id: 3, value: 'Task', color: 'bg-gray-500' }
-  ];
-  severityOptions = [
-    { id: 1, value: 'Low', color: 'bg-green-400' },
-    { id: 2, value: 'Normal', color: 'bg-blue-400' },
-    { id: 3, value: 'High', color: 'bg-orange-400' },
-    { id: 4, value: 'Critical', color: 'bg-red-600' }
-  ];
-  priorityOptions = [
-    { id: 1, value: 'Low', color: 'bg-green-300' },
-    { id: 2, value: 'Normal', color: 'bg-yellow-400' },
-    { id: 3, value: 'High', color: 'bg-orange-400' },
-    { id: 4, value: 'Urgent', color: 'bg-red-500' }
-  ];
-  statusOptions = [
-    { id: 1, value: 'New' },
-    { id: 2, value: 'Open' },
-    { id: 3, value: 'In Progress' },
-    { id: 4, value: 'Resolved' },
-    { id: 5, value: 'Closed' }
-  ];
+export class IssueSidebarComponent implements OnChanges {
+  @Input() issue!: Issue;
+  @Input() typeOptions: IssueTypeDetail[] = [];
+  @Input() severityOptions: SeverityDetail[] = [];
+  @Input() priorityOptions: PriorityDetail[] = [];
+  @Input() statusOptions: StatusDetail[] = [];
+  @Input() currentUser!: UserLite | null;
+  @Input() allProjectUsers: UserLite[] = [];
 
-  issue = {
-    type: 1,
-    severity: 2,
-    priority: 2,
-    status: 1,
-    date: null as string | null // This is fine
-  };
+  @Output() issuePropertyChange = new EventEmitter<{ field: keyof Issue, value: any, currentIssue: Issue }>();
+  @Output() deleteIssueInitiated = new EventEmitter<number>(); // Nuevo Output para el ID del issue a borrar
 
+  editableIssue!: Issue;
   showDatePicker = false;
-
   dropdown = {
-    type: false,
+    issue_type: false,
     severity: false,
     priority: false,
     status: false
   };
-
-  private activeDropdownButton: HTMLButtonElement | null = null;
+  activeDropdownButton: HTMLButtonElement | null = null;
 
   constructor(private eRef: ElementRef) {}
 
-  toggleDropdown(field: 'type' | 'severity' | 'priority' | 'status', event?: MouseEvent) {
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['issue'] && changes['issue'].currentValue) {
+      this.editableIssue = { ...changes['issue'].currentValue };
+    }
+  }
+
+  // ... (otros métodos existentes como toggleDropdown, selectOption, etc.)
+
+  onDeleteIssueClicked(): void {
+    if (!this.editableIssue || typeof this.editableIssue.id === 'undefined') {
+      console.error('IssueSidebarComponent: Issue data or ID is missing, cannot initiate delete.');
+      return;
+    }
+    const confirmed = window.confirm('Are you sure you want to delete this issue? This action cannot be undone.');
+    if (confirmed) {
+      this.deleteIssueInitiated.emit(this.editableIssue.id);
+    }
+  }
+
+  // ... (resto de los métodos)
+  toggleDropdown(field: keyof typeof this.dropdown, event?: MouseEvent) { // Copiado de la anterior respuesta para completitud
     const buttonElement = event ? event.currentTarget as HTMLButtonElement : null;
     const wasOpen = this.dropdown[field];
-
     Object.keys(this.dropdown).forEach(key => {
-      this.dropdown[key as keyof typeof this.dropdown] = false;
+      (this.dropdown as any)[key] = false;
     });
-
     if (!wasOpen && buttonElement) {
       this.dropdown[field] = true;
       this.activeDropdownButton = buttonElement;
@@ -72,99 +87,112 @@ export class IssueSidebarComponent {
     }
   }
 
-  selectOption(field: 'type' | 'severity' | 'priority' | 'status', option: { id: number, value: string }, clickEvent?: MouseEvent) {
-    this.issue[field] = option.id;
+  selectOption( // Copiado de la anterior respuesta para completitud
+    field: IssueFieldWithOptions,
+    option: IssueTypeDetail | SeverityDetail | PriorityDetail | StatusDetail,
+    clickEvent?: MouseEvent
+  ) {
+    if (!this.editableIssue) return;
+    switch (field) {
+      case 'issue_type':
+        this.editableIssue.issue_type = option as IssueTypeDetail;
+        break;
+      case 'severity':
+        this.editableIssue.severity = option as SeverityDetail;
+        break;
+      case 'priority':
+        this.editableIssue.priority = option as PriorityDetail;
+        break;
+      case 'status':
+        this.editableIssue.status = option as StatusDetail;
+        break;
+    }
     this.dropdown[field] = false;
-    this.refreshIssue();
-
-    if (clickEvent && clickEvent.target instanceof HTMLElement) {
-      clickEvent.target.blur();
-    }
-
-    if (this.activeDropdownButton) {
-      this.activeDropdownButton.blur();
-    }
+    this.issuePropertyChange.emit({ field: field, value: option, currentIssue: this.issue });
+    if (clickEvent && clickEvent.target instanceof HTMLElement) clickEvent.target.blur();
+    if (this.activeDropdownButton) this.activeDropdownButton.blur();
   }
 
-  getOptionValue(field: 'type' | 'severity' | 'priority' | 'status', id: number): string {
-    let options;
-    switch (field) {
-      case 'type': options = this.typeOptions; break;
-      case 'severity': options = this.severityOptions; break;
-      case 'priority': options = this.priorityOptions; break;
-      case 'status': options = this.statusOptions; break;
-      default: return ''; // Should not happen with defined types
-    }
-    const found = options.find((opt) => opt.id === id);
-    return found ? found.value : '';
-  }
-
-  getOptionColor(field: 'type' | 'severity' | 'priority', id: number): string {
-    let options;
-    switch (field) {
-      case 'type': options = this.typeOptions; break;
-      case 'severity': options = this.severityOptions; break;
-      case 'priority': options = this.priorityOptions; break;
-      default: return '';
-    }
-    const found = options.find((opt) => opt.id === id);
-    return found && 'color' in found ? (found as any).color : '';
-  }
-
-  closeAllDropdowns() {
-    this.dropdown = {
-      type: false,
-      severity: false,
-      priority: false,
-      status: false
-    };
+  closeAllDropdowns() { // Copiado de la anterior respuesta para completitud
+    this.dropdown = { issue_type: false, severity: false, priority: false, status: false };
     this.activeDropdownButton = null;
   }
 
-  refreshIssue() {
-    // Lógica para actualizar el issue
-    console.log("Issue refreshed:", this.issue);
+  handleDateInputChange(event: Event): void { // Copiado de la anterior respuesta para completitud
+    const inputElement = event.target as HTMLInputElement | null;
+    if (inputElement && this.editableIssue) this.setDeadline(inputElement.value);
   }
 
-  // NEW METHOD TO HANDLE DATE INPUT CHANGE
-  handleDateInputChange(event: Event): void {
-    const inputElement = event.target as HTMLInputElement | null;
-    if (inputElement) {
-      this.setDate(inputElement.value);
-    } else {
-      // Handle case where target is null if necessary, though unlikely for input change
-      this.setDate(''); // or some default or error handling
+  setDeadline(dateString: string | null) { // Copiado de la anterior respuesta para completitud
+    if (!this.editableIssue) return;
+    this.editableIssue.deadline = dateString;
+    this.showDatePicker = false;
+    this.issuePropertyChange.emit({ field: 'deadline', value: dateString, currentIssue: this.issue });
+  }
+
+  removeDeadline() { // Copiado de la anterior respuesta para completitud
+    if (!this.editableIssue) return;
+    this.editableIssue.deadline = null;
+    this.showDatePicker = false;
+    this.issuePropertyChange.emit({ field: 'deadline', value: null, currentIssue: this.issue });
+  }
+
+  @HostListener('document:click', ['$event']) // Copiado de la anterior respuesta para completitud
+  handleClickOutside(event: MouseEvent) {
+    if (!this.eRef.nativeElement.contains(event.target)) {
+      this.closeAllDropdowns();
+      if (this.showDatePicker) this.showDatePicker = false;
     }
   }
 
-  setDate(date: string) { // This method is fine as is
-    this.issue.date = date;
-    this.showDatePicker = false;
-    this.refreshIssue(); // Good to call refresh here too if needed
+  handleAssigneeAdded(user: UserLite): void { // Copiado de la anterior respuesta para completitud
+    if (!this.editableIssue) return;
+    this.editableIssue.assignee = user;
+    this.issuePropertyChange.emit({ field: 'assignee', value: user, currentIssue: this.issue });
   }
 
-  removeDate() {
-    this.issue.date = null;
-    this.showDatePicker = false;
-    this.refreshIssue(); // Good to call refresh here too if needed
+  handleAssigneeRemoved(userToRemove: UserLite): void { // Copiado de la anterior respuesta para completitud
+    if (!this.editableIssue || !this.editableIssue.assignee || this.editableIssue.assignee.id !== userToRemove.id) return;
+    this.editableIssue.assignee = null;
+    this.issuePropertyChange.emit({ field: 'assignee', value: null, currentIssue: this.issue });
   }
 
-  @HostListener('document:click', ['$event'])
-  handleClickOutside(event: MouseEvent) {
-    const isInside = this.eRef.nativeElement.contains(event.target);
-    if (!isInside) {
-      this.closeAllDropdowns();
-      if (this.showDatePicker) { // Also close date picker if open
-        this.showDatePicker = false;
+  handleCurrentAssigneeToggled(isAdding: boolean): void { // Copiado de la anterior respuesta para completitud
+    if (!this.editableIssue || !this.currentUser) return;
+    if (isAdding) {
+      this.editableIssue.assignee = this.currentUser;
+      this.issuePropertyChange.emit({ field: 'assignee', value: this.currentUser, currentIssue: this.issue });
+    } else {
+      if (this.editableIssue.assignee && this.editableIssue.assignee.id === this.currentUser.id) {
+        this.editableIssue.assignee = null;
+        this.issuePropertyChange.emit({ field: 'assignee', value: null, currentIssue: this.issue });
       }
     }
   }
 
-  @HostListener('document:mousedown', ['$event'])
-  removeFocus(event: MouseEvent) {
-    const active = document.activeElement as HTMLElement;
-    if (active && !['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName)) {
-      active.blur();
+  handleWatcherAdded(user: UserLite): void { // Copiado de la anterior respuesta para completitud
+    if (!this.editableIssue) return;
+    if (!this.editableIssue.watchers.find((w: UserLite) => w.id === user.id)) {
+      this.editableIssue.watchers = [...this.editableIssue.watchers, user];
+      this.issuePropertyChange.emit({ field: 'watchers', value: { action: 'add', user: user }, currentIssue: this.issue });
+    }
+  }
+
+  handleWatcherRemoved(user: UserLite): void { // Copiado de la anterior respuesta para completitud
+    if (!this.editableIssue) return;
+    this.editableIssue.watchers = this.editableIssue.watchers.filter((w: UserLite) => w.id !== user.id);
+    this.issuePropertyChange.emit({ field: 'watchers', value: { action: 'remove', user: user }, currentIssue: this.issue });
+  }
+
+  handleCurrentWatcherToggled(isAdding: boolean): void { // Copiado de la anterior respuesta para completitud
+    if (!this.editableIssue || !this.currentUser) return;
+    const isWatching = this.editableIssue.watchers.some((w: UserLite) => w.id === this.currentUser!.id);
+    if (isAdding && !isWatching) {
+      this.editableIssue.watchers = [...this.editableIssue.watchers, this.currentUser!];
+      this.issuePropertyChange.emit({ field: 'watchers', value: { action: 'add', user: this.currentUser! }, currentIssue: this.issue });
+    } else if (!isAdding && isWatching) {
+      this.editableIssue.watchers = this.editableIssue.watchers.filter((w: UserLite) => w.id !== this.currentUser!.id);
+      this.issuePropertyChange.emit({ field: 'watchers', value: { action: 'remove', user: this.currentUser! }, currentIssue: this.issue });
     }
   }
 }

@@ -1,0 +1,56 @@
+<div>
+  <h3 class="text-xs font-bold uppercase text-gray-500 mb-2">{{ title }}</h3>
+
+  <div *ngIf="selectedUsers && selectedUsers.length > 0" class="mb-2 space-y-1">
+    <div *ngFor="let user of selectedUsers" class="flex items-center justify-between text-sm p-1 bg-gray-200 rounded">
+      <div class="flex items-center min-w-0"> <img *ngIf="user.avatar_url"
+                                                   [src]="user.avatar_url"
+                                                   alt="{{user.username}}'s avatar"
+                                                   class="w-6 h-6 rounded-full mr-2 flex-shrink-0">
+        <div *ngIf="!user.avatar_url"
+             class="w-6 h-6 rounded-full mr-2 bg-gray-400 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0"
+             [title]="user.username">
+          {{ user.first_name ? user.first_name[0].toUpperCase() : '' }}{{ user.last_name ? user.last_name[0].toUpperCase() : '' }}
+        </div>
+        <span class="truncate" [title]="user.first_name + ' ' + user.last_name + ' (' + user.username + ')'">
+          {{ user.first_name }} {{ user.last_name }}
+        </span>
+        <span class="text-gray-600 ml-1 truncate" [title]="user.username">({{ user.username }})</span>
+      </div>
+      <button (click)="removeUser(user)" class="ml-2 text-red-500 hover:text-red-700 text-xs flex-shrink-0">✕</button>
+    </div>
+  </div>
+
+  <div class="flex gap-2">
+    <div class="relative w-full">
+      <button
+        (click)="toggleUserListDropdown($event)"
+        class="w-full bg-white border border-gray-300 text-gray-500 px-3 py-2 text-sm rounded hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+        {{ addExistingText }}
+      </button>
+      <div *ngIf="showUserListDropdown" class="absolute left-0 right-0 mt-1 bg-white border rounded shadow z-30 max-h-40 overflow-y-auto">
+        <div *ngIf="availableUsersForDropdown.length === 0" class="px-3 py-2 text-xs text-gray-400">No users to add.</div>
+        <div
+          *ngFor="let user of availableUsersForDropdown"
+          (click)="addUserFromDropdown(user)"
+          class="flex items-center px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"> <img *ngIf="user.avatar_url"
+                                                                                             [src]="user.avatar_url"
+                                                                                             alt="{{user.username}}'s avatar"
+                                                                                             class="w-6 h-6 rounded-full mr-2 flex-shrink-0">
+          <div *ngIf="!user.avatar_url"
+               class="w-6 h-6 rounded-full mr-2 bg-gray-400 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0"
+               [title]="user.username">
+            {{ user.first_name ? user.first_name[0].toUpperCase() : '' }}{{ user.last_name ? user.last_name[0].toUpperCase() : '' }}
+          </div>
+          <span class="truncate">{{ user.first_name }} {{ user.last_name }} ({{ user.username }})</span>
+        </div>
+      </div>
+    </div>
+
+    <button
+      (click)="toggleCurrentUser()"
+      class="w-full bg-white border border-gray-300 text-gray-500 px-3 py-2 text-sm rounded hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+      {{ isCurrentUserSelected ? removeMeText : addMeText }}
+    </button>
+  </div>
+</div>
