@@ -1,7 +1,8 @@
 // src/app/issues/feature/issues/issues.component.ts
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { IssueSidebarComponent } from './issue-sidebar.component';
+import { IssueSidebarComponent } from '../issue-sidebar/issue-sidebar.component';
+import { IssueDetailComponent } from '../issue-detail/issue-detail.component';
 import {
   IssueService,
   Issue,
@@ -11,52 +12,54 @@ import {
 } from '../../data-access/issue.service';
 import { Observable, of } from 'rxjs';
 import { tap } from 'rxjs/operators';
-// import { Router } from '@angular/router'; // Descomenta si vas a navegar
 
 @Component({
   selector: 'app-issues',
   standalone: true,
-  imports: [CommonModule, IssueSidebarComponent],
+  imports: [
+    CommonModule,
+    IssueSidebarComponent,
+    IssueDetailComponent
+  ],
   templateUrl: './issues.component.html',
   styleUrl: './issues.component.css'
 })
 export class IssuesComponent implements OnInit {
   private issueService = inject(IssueService);
-  // private router = inject(Router); // Descomenta si vas a navegar
 
   currentIssue$: Observable<Issue | null> = of(null);
   issueOptions$: Observable<IssueOptions | null> = of(null);
   currentUser$: Observable<UserLite | null> = of(null);
   allProjectUsers$: Observable<UserLite[]> = of([]);
 
-  private issueId = '123'; // ID del issue actual, asegúrate que se obtiene dinámicamente si es necesario
+  // MODIFIED: Made issueId public by removing 'private'
+  issueId = '123'; // O cómo sea que obtengas el ID del issue
 
   ngOnInit(): void {
-    this.loadIssueData(); // Renombrado para claridad
+    this.loadIssueData();
     this.loadDropdownOptions();
     this.loadUserContext();
   }
 
   loadIssueData(): void {
     this.currentIssue$ = this.issueService.getIssue(this.issueId).pipe(
-      tap(issue => console.log('IssuesComponent: Loaded issue data', issue))
+      tap(returnedIssue => console.log('IssuesComponent: Loaded issue data', returnedIssue)) // Changed 'issue' to 'returnedIssue' to avoid conflict if needed
     );
   }
 
-  loadDropdownOptions(): void { // Renombrado para claridad
+  loadDropdownOptions(): void {
     this.issueOptions$ = this.issueService.getIssueOptions().pipe(
       tap(options => console.log('IssuesComponent: Loaded issue options', options))
     );
   }
 
-  loadUserContext(): void { // Nuevo método
+  loadUserContext(): void {
     this.currentUser$ = this.issueService.getCurrentUser();
     this.allProjectUsers$ = this.issueService.getProjectUsers();
   }
 
-
   handleIssueUpdate(event: { field: keyof Issue, value: any, currentIssue: Issue }): void {
-    // ... (tu lógica de handleIssueUpdate existente)
+    // ... (resto del método sin cambios)
     if (!event.currentIssue || !event.currentIssue.id) {
       console.error('IssuesComponent: Cannot update issue, current issue or ID is missing.');
       return;
@@ -103,27 +106,20 @@ export class IssuesComponent implements OnInit {
   }
 
   handleDeleteIssue(issueIdToDelete: number): void {
+    // ... (resto del método sin cambios)
     console.log(`IssuesComponent: Attempting to delete issue with ID: ${issueIdToDelete}`);
     this.issueService.deleteIssue(issueIdToDelete).subscribe({
       next: () => {
         console.log(`IssuesComponent: Issue ${issueIdToDelete} successfully deleted.`);
-        alert(`Issue ${issueIdToDelete} deleted successfully!`); // Simple feedback
-
-        // Lógica post-borrado:
-        // Si el issue borrado es el que se está mostrando actualmente, límpialo.
-        if (String(this.issueId) === String(issueIdToDelete)) { // Comparar como strings por si acaso
-          this.currentIssue$ = of(null); // Limpia la vista actual
-          // Aquí podrías navegar a otra página, por ejemplo, la lista de issues:
-          // this.router.navigate(['/issues']); // Si tienes un router configurado
+        alert(`Issue ${issueIdToDelete} deleted successfully!`);
+        if (String(this.issueId) === String(issueIdToDelete)) {
+          this.currentIssue$ = of(null);
           console.log('Current issue view cleared as it was deleted.');
-        } else {
-          // Si se borró otro issue (ej. desde una lista, no aplicable aquí aún),
-          // podrías refrescar la lista.
         }
       },
       error: (err: any) => {
         console.error(`IssuesComponent: Error deleting issue ${issueIdToDelete}`, err);
-        alert(`Failed to delete issue ${issueIdToDelete}. Please try again.`); // Simple feedback
+        alert(`Failed to delete issue ${issueIdToDelete}. Please try again.`);
       }
     });
   }

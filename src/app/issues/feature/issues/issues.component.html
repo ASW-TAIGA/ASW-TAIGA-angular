@@ -1,11 +1,17 @@
-<div class="issues-container flex">
+<div class="issues-container flex h-screen overflow-hidden">
 
-  <div class="issue-main-content flex-grow p-6" *ngIf="currentIssue$ | async as issue">
-    <h1 class="text-2xl font-bold mb-4">{{ issue.title }}</h1>
-    <p>{{ issue.description }}</p>
+  <div class="issue-main-content flex-grow overflow-y-auto">
+    <ng-container *ngIf="currentIssue$ | async as issue; else noIssueSelected">
+      <app-issue-detail [issue]="issue"></app-issue-detail>
+    </ng-container>
+    <ng-template #noIssueSelected>
+      <div class="p-6 text-center text-gray-500 italic h-full flex items-center justify-center">
+        <p *ngIf="!(currentIssue$ | async) && issueId">Loading issue...</p>
+      </div>
+    </ng-template>
   </div>
 
-  <div class="sidebar-wrapper w-96 flex-shrink-0">
+  <div class="sidebar-wrapper w-[416px] flex-shrink-0 border-l border-gray-200 h-full overflow-y-auto sticky top-0">
     <ng-container *ngIf="currentIssue$ | async as issue">
       <ng-container *ngIf="issueOptions$ | async as options">
         <ng-container *ngIf="currentUser$ | async as resolvedCurrentUser">
@@ -19,14 +25,14 @@
               [currentUser]="resolvedCurrentUser"
               [allProjectUsers]="resolvedAllProjectUsers"
               (issuePropertyChange)="handleIssueUpdate($event)"
-              (deleteIssueInitiated)="handleDeleteIssue($event)"> </app-issue-sidebar>
+              (deleteIssueInitiated)="handleDeleteIssue($event)">
+            </app-issue-sidebar>
           </ng-container>
         </ng-container>
       </ng-container>
     </ng-container>
-  </div>
-
-  <div *ngIf="!(currentIssue$ | async) || !(issueOptions$ | async) || !(currentUser$ | async) || !(allProjectUsers$ | async)">
-    Loading issue details...
+    <div *ngIf="!(currentIssue$ | async)" class="p-6 text-center text-gray-400 italic">
+      No issue selected for sidebar.
+    </div>
   </div>
 </div>
