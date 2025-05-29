@@ -1,5 +1,5 @@
-// src/app/issues/feature/issues/issues.component.ts
-import { Component, OnInit, Input, OnChanges, SimpleChanges, Output, EventEmitter, inject } from '@angular/core'; // MODIFICADO: Añadido Output y EventEmitter
+// src/app/issues/feature/issues/issue.component.ts
+import { OnInit, Input, OnChanges, SimpleChanges, Output, EventEmitter, inject } from '@angular/core'; // MODIFICADO: Añadido Output y EventEmitter
 import { CommonModule } from '@angular/common';
 import { IssueSidebarComponent } from '../issue-sidebar/issue-sidebar.component';
 import { IssueDetailComponent } from '../issue-detail/issue-detail.component';
@@ -14,8 +14,7 @@ import { Observable, BehaviorSubject, of, Subscription } from 'rxjs';
 import { tap } from 'rxjs/operators';
 
 import { Component, HostListener } from '@angular/core';
-import { IssueSidebarComponent } from './issue-sidebar.component';
-import { IssuesListComponent } from './issues-list/issues-list.component';
+import { IssuesListComponent } from '../issues-list/issues-list.component';
 
 
 @Component({
@@ -24,12 +23,13 @@ import { IssuesListComponent } from './issues-list/issues-list.component';
   imports: [
     CommonModule,
     IssueSidebarComponent,
-    IssueDetailComponent
+    IssueDetailComponent,
+    IssuesListComponent
   ],
-  templateUrl: './issues.component.html',
-  styleUrl: './issues.component.css'
+  templateUrl: './issue.component.html',
+  styleUrl: './issue.component.css'
 })
-export class IssuesComponent implements OnInit, OnChanges {
+export class IssueComponent implements OnInit, OnChanges {
   @Input() issueToShow: Issue | null = null;
 
   private issueService = inject(IssueService);
@@ -53,35 +53,35 @@ export class IssuesComponent implements OnInit, OnChanges {
 
 
   constructor() {
-    console.log('IssuesComponent: Constructor - initial issueToShow:', this.issueToShow, 'initial issueId:', this.issueId);
+    console.log('IssueComponent: Constructor - initial issueToShow:', this.issueToShow, 'initial issueId:', this.issueId);
   }
 
   ngOnInit(): void {
-    console.log('IssuesComponent: ngOnInit START - initial issueToShow:', this.issueToShow, 'INTERNAL issueId:', this.issueId);
+    console.log('IssueComponent: ngOnInit START - initial issueToShow:', this.issueToShow, 'INTERNAL issueId:', this.issueId);
     this.setupCurrentIssueStream();
 
     if (this.issueToShow) {
       this._currentIssueSubject.next(this.issueToShow);
       this.issueId = String(this.issueToShow.id);
-      console.log('IssuesComponent: ngOnInit - Using issueToShow from @Input:', this.issueToShow);
+      console.log('IssueComponent: ngOnInit - Using issueToShow from @Input:', this.issueToShow);
     } else if (this.issueId) {
       console.log(`IssuesComponent: ngOnInit - No issueToShow from @Input, attempting to load default issueId: ${this.issueId}`);
       this.loadIssueById(this.issueId);
     } else {
-      console.log('IssuesComponent: ngOnInit - No issueToShow from @Input and no default issueId set. CurrentIssue will be null.');
+      console.log('IssueComponent: ngOnInit - No issueToShow from @Input and no default issueId set. CurrentIssue will be null.');
       this._currentIssueSubject.next(null);
     }
 
     this.loadDropdownOptions();
     this.loadUserContext();
-    console.log('IssuesComponent: ngOnInit END');
+    console.log('IssueComponent: ngOnInit END');
   }
 
   ngOnChanges(changes: SimpleChanges): void {
-    console.log('IssuesComponent: ngOnChanges - triggered. Changes:', changes);
+    console.log('IssueComponent: ngOnChanges - triggered. Changes:', changes);
     if (changes['issueToShow']) {
       const newIssue = changes['issueToShow'].currentValue as Issue | null;
-      console.log('IssuesComponent: ngOnChanges - issueToShow changed to:', newIssue);
+      console.log('IssueComponent: ngOnChanges - issueToShow changed to:', newIssue);
       this._currentIssueSubject.next(newIssue);
       if (newIssue) {
         this.issueId = String(newIssue.id);
@@ -96,7 +96,7 @@ export class IssuesComponent implements OnInit, OnChanges {
       }
     }
     if (changes['allIssueIds']) { // Si la lista de todos los IDs cambia
-      console.log('IssuesComponent: ngOnChanges - allIssueIds changed:', this.allIssueIds);
+      console.log('IssueComponent: ngOnChanges - allIssueIds changed:', this.allIssueIds);
       this.updateNavigationState(this._currentIssueSubject.getValue());
     }
   }
@@ -106,7 +106,7 @@ export class IssuesComponent implements OnInit, OnChanges {
       this.currentIssueSubscription.unsubscribe();
     }
     this.currentIssueSubscription = this.currentIssue$.subscribe(currentIssue => {
-      console.log('IssuesComponent: currentIssue$ emitted:', currentIssue);
+      console.log('IssueComponent: currentIssue$ emitted:', currentIssue);
       this.updateNavigationState(currentIssue);
     });
   }
@@ -132,10 +132,10 @@ export class IssuesComponent implements OnInit, OnChanges {
   loadIssueById(id: string): void {
     console.log(`IssuesComponent: loadIssueById - Calling issueService.getIssue for ID: ${id}`);
     this.issueService.getIssue(id).pipe(
-      tap(returnedIssue => console.log('IssuesComponent (loadIssueById pipe): Fetched issue data via service', returnedIssue))
+      tap(returnedIssue => console.log('IssueComponent (loadIssueById pipe): Fetched issue data via service', returnedIssue))
     ).subscribe({
       next: (issue) => {
-        console.log('IssuesComponent (loadIssueById subscribe): SUCCESS - Received issue:', issue);
+        console.log('IssueComponent (loadIssueById subscribe): SUCCESS - Received issue:', issue);
         this._currentIssueSubject.next(issue);
       },
       error: (err) => {
@@ -147,7 +147,7 @@ export class IssuesComponent implements OnInit, OnChanges {
 
   loadDropdownOptions(): void {
     this.issueOptions$ = this.issueService.getIssueOptions().pipe(
-      tap(options => console.log('IssuesComponent: Loaded issue options', options))
+      tap(options => console.log('IssueComponent: Loaded issue options', options))
     );
   }
 
@@ -159,7 +159,7 @@ export class IssuesComponent implements OnInit, OnChanges {
   handleIssueUpdate(event: { field: keyof Issue, value: any, currentIssue: Issue }): void {
     // ... (tu método handleIssueUpdate sin cambios, ya tiene buenos logs) ...
     if (!event.currentIssue || !event.currentIssue.id) {
-      console.error('IssuesComponent: Cannot update issue, current issue or ID is missing.');
+      console.error('IssueComponent: Cannot update issue, current issue or ID is missing.');
       return;
     }
     console.log(`IssuesComponent (LOG A): Received update for field '${String(event.field)}' with value:`, event.value);
@@ -189,26 +189,26 @@ export class IssuesComponent implements OnInit, OnChanges {
     }
 
     if (Object.keys(payload).length === 0) {
-      console.log('IssuesComponent: No valid changes mapped to update payload. Field was:', fieldKey);
+      console.log('IssueComponent: No valid changes mapped to update payload. Field was:', fieldKey);
       return;
     }
-    console.log('IssuesComponent (LOG B): About to call issueService.updateIssue() with ID:', event.currentIssue.id, 'and payload:', payload);
+    console.log('IssueComponent (LOG B): About to call issueService.updateIssue() with ID:', event.currentIssue.id, 'and payload:', payload);
     const updateObservable = this.issueService.updateIssue(event.currentIssue.id, payload);
-    console.log('IssuesComponent (LOG C): Value returned by issueService.updateIssue():', updateObservable);
+    console.log('IssueComponent (LOG C): Value returned by issueService.updateIssue():', updateObservable);
     if (!updateObservable || typeof updateObservable.subscribe !== 'function') {
-      console.error('IssuesComponent (LOG D): CRITICAL - issueService.updateIssue() did NOT return a valid Observable!');
+      console.error('IssueComponent (LOG D): CRITICAL - issueService.updateIssue() did NOT return a valid Observable!');
       return;
     }
     updateObservable.subscribe({
       next: (updatedIssue: Issue) => {
-        console.log('IssuesComponent (LOG E) (subscribe): Service returned updatedIssue:', updatedIssue);
+        console.log('IssueComponent (LOG E) (subscribe): Service returned updatedIssue:', updatedIssue);
         if (updatedIssue && updatedIssue.description !== undefined) {
-          console.log('IssuesComponent (LOG E) (subscribe): Description in updatedIssue from service:', updatedIssue.description);
+          console.log('IssueComponent (LOG E) (subscribe): Description in updatedIssue from service:', updatedIssue.description);
         }
         this._currentIssueSubject.next(updatedIssue);
       },
       error: (err: any) => {
-        console.error('IssuesComponent (LOG F) (subscribe): Error updating issue:', err);
+        console.error('IssueComponent (LOG F) (subscribe): Error updating issue:', err);
         const currentIssueVal = this._currentIssueSubject.getValue();
         if (currentIssueVal && currentIssueVal.id === event.currentIssue.id) {
           this._currentIssueSubject.next(event.currentIssue);
@@ -240,7 +240,7 @@ export class IssuesComponent implements OnInit, OnChanges {
 
   onNavigateToPreviousRequested(): void {
     if (this.canGoPrevious && this.previousIssueId !== null) {
-      console.log('IssuesComponent: Navigating to previous issue ID:', this.previousIssueId);
+      console.log('IssueComponent: Navigating to previous issue ID:', this.previousIssueId);
       // this.changeIssueRequest.emit(this.previousIssueId); // Para el padre
       this.issueService.getIssue(this.previousIssueId).subscribe(prevIssue => {
         if(prevIssue) this._currentIssueSubject.next(prevIssue);
@@ -250,7 +250,7 @@ export class IssuesComponent implements OnInit, OnChanges {
 
   onNavigateToNextRequested(): void {
     if (this.canGoNext && this.nextIssueId !== null) {
-      console.log('IssuesComponent: Navigating to next issue ID:', this.nextIssueId);
+      console.log('IssueComponent: Navigating to next issue ID:', this.nextIssueId);
       // this.changeIssueRequest.emit(this.nextIssueId); // Para el padre
       this.issueService.getIssue(this.nextIssueId).subscribe(nextIssue => {
         if(nextIssue) this._currentIssueSubject.next(nextIssue);
