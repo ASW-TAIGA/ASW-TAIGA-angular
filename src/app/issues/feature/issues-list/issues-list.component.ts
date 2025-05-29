@@ -1,105 +1,188 @@
 // src/app/issues/feature/issues-list/issues-list.component.ts
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, HostListener, ElementRef } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
+import { Router } from '@angular/router';
 import { Observable, of, forkJoin } from 'rxjs';
 import { map, tap, catchError } from 'rxjs/operators';
-import { Issue, IssueService, UserLite } from '../../data-access/issue.service'; // Ajusta la ruta si es necesario
-import { IssueComponent } from '../issue/issue.component'; // El que contiene detalle+sidebar
+import {
+  Issue,
+  IssueService,
+  UserLite,
+  IssueOptions,
+  IssueUpdatePayload,
+  NewIssueFormData
+} from '../../data-access/issue.service'; // Asegúrate que todas estas se exportan desde el servicio
+import { IssueFormComponent } from '../issue-form/issue-form.component';
+// IssueComponent ya no se importa aquí si la navegación por rutas lo maneja
+
+type SortableColumnKey = 'issue_type' | 'severity' | 'priority' | 'status';
 
 @Component({
   selector: 'app-issues-list',
   standalone: true,
-  imports: [CommonModule, DatePipe, IssueComponent],
+  imports: [CommonModule, DatePipe, IssueFormComponent],
   templateUrl: './issues-list.component.html',
   styleUrls: ['./issues-list.component.css']
 })
 export class IssuesListComponent implements OnInit {
   private issueService = inject(IssueService);
+  private router = inject(Router);
+  private elementRef = inject(ElementRef);
 
   issues: Issue[] = [];
-  selectedIssue: Issue | null = null;
-
-  currentUser: UserLite | null = null;
-  allProjectUsers: UserLite[] = [];
-  allIssueIdsForNavigation: (string | number)[] = [];
-
   isLoading: boolean = true;
-  // isLoadingDetails no es necesario si el objeto 'issue' de la lista ya está completo y no re-cargamos
-  // isLoadingDetails: boolean = false;
+
+  // selectedIssue y los inputs para IssueComponent ya no son necesarios aquí
+  // si IssueComponent se maneja completamente por rutas y carga sus propios datos.
+  // selectedIssue: Issue | null = null;
+  // allIssueIdsForNavigation: (string | number)[] = []; // Se gestiona en IssueComponent
+
+  // Propiedades para el ordenamiento
+  currentSortColumn: SortableColumnKey | null = null;
+  sortDirection: 'asc' | 'desc' = 'asc';
+
+  // Para el formulario de Nuevo Issue
+  showNewIssueForm: boolean = false;
+  issueOptionsForForm: IssueOptions | null = null;
+  currentUserForForm: UserLite | null = null;
+  allProjectUsersForForm: UserLite[] = [];
+
+  // Para el dropdown de asignados en la lista
+  activeAssigneeDropdownForIssueId: number | string | null = null;
+
+  constructor() {}
 
   ngOnInit(): void {
-    this.loadInitialData();
+    this.loadIssues();
+    this.loadDataForFormsAndContext();
   }
 
-  loadInitialData(): void {
+  loadIssues(): void {
     this.isLoading = true;
-    this.selectedIssue = null;
-
-    forkJoin({
-      issues: this.issueService.getIssues(),
-      currentUser: this.issueService.getCurrentUser(),
-      projectUsers: this.issueService.getProjectUsers()
-    }).pipe(
-      tap(data => console.log('IssuesListComponent: Initial data fetched from service', data)),
-      map(data => {
-        this.issues = data.issues;
-        this.currentUser = data.currentUser;
-        this.allProjectUsers = data.projectUsers;
-        this.allIssueIdsForNavigation = data.issues.map(issue => issue.id);
-        return data;
-      }),
+    this.issueService.getIssues().pipe(
+      tap(issues => console.log('IssuesListComponent: Issues loaded for list', issues.length)),
       catchError(error => {
-        console.error('IssuesListComponent: Error loading initial data', error);
+        console.error('IssuesListComponent: Error loading issues', error);
         this.isLoading = false;
-        return of(null);
+        return of([]);
       })
-    ).subscribe({
-      complete: () => {
-        this.isLoading = false;
-        console.log('IssuesListComponent: Initial data loading complete.');
+    ).subscribe(issues => {
+      this.issues = issues;
+      if (this.currentSortColumn) {
+        this.applyCurrentSort();
+      }
+      this.isLoading = false;
+    });
+  }
+
+  loadDataForFormsAndContext(): void {
+    this.issueService.getIssueOptions().subscribe(options => this.issueOptionsForForm = options);
+    this.issueService.getCurrentUser().subscribe(user => this.currentUserForForm = user);
+    this.issueService.getProjectUsers().subscribe(users => this.allProjectUsersForForm = users);
+  }
+
+  selectIssueAndNavigate(issue: Issue): void {
+    console.log('IssuesListComponent: Navigating to issue ID:', issue.id);
+    this.router.navigate(['/issues', issue.id]); // Navega a la ruta de detalle
+  }
+
+  toggleNewIssueForm(): void {
+    this.showNewIssueForm = !this.showNewIssueForm;
+  }
+
+  handleIssueCreated(eventPayload: { issueData: NewIssueFormData, files: File[] }): void {
+    console.log('IssuesListComponent: handleIssueCreated, data from form:', eventPayload.issueData);
+    if (!this.currentUserForForm) {
+      alert("Error: Current user not available for creating issue.");
+      return;
+    }
+
+    this.issueService.createIssue(eventPayload.issueData, this.currentUserForForm).subscribe({
+      next: (createdIssue) => {
+        console.log('IssuesListComponent: Issue created successfully by service:', createdIssue);
+        this.issues = [createdIssue, ...this.issues];
+        if (this.currentSortColumn) {
+          this.applyCurrentSort();
+        }
+        this.showNewIssueForm = false;
+        this.selectIssueAndNavigate(createdIssue);
+      },
+      error: (err) => {
+        console.error('IssuesListComponent: Error creating issue:', err);
+        alert(`Failed to create issue: ${err.message || 'Unknown error'}`);
       }
     });
   }
 
-  selectIssue(issue: Issue): void {
-    console.log('IssuesListComponent: selectIssue - Called with issue ID:', issue.id);
-    this.selectedIssue = issue;
-    // Forzamos un log para ver el estado inmediatamente después de la asignación
-    console.log('IssuesListComponent: selectIssue - this.selectedIssue is now:', this.selectedIssue ? this.selectedIssue.id : 'null');
-    // Si esto no funciona, puede ser un problema de detección de cambios. Intenta forzarlo (solo para depurar):
-    // setTimeout(() => {
-    //   console.log('IssuesListComponent: selectIssue - this.selectedIssue after timeout:', this.selectedIssue ? this.selectedIssue.id : 'null');
-    // }, 0);
-  }
-
-  deselectIssue(): void {
-    console.log('IssuesListComponent: deselectIssue called.');
-    this.selectedIssue = null;
-    console.log('IssuesListComponent: this.selectedIssue is now:', this.selectedIssue);
-  }
-
-  handleChangeIssueRequest(issueId: string | number): void {
-    console.log('IssuesListComponent: Received changeIssueRequest for ID:', issueId);
-    const issueToSelect = this.issues.find(iss => String(iss.id) === String(issueId));
-
-    if (issueToSelect) {
-      this.selectIssue(issueToSelect);
+  sortBy(column: SortableColumnKey): void {
+    if (this.currentSortColumn === column) {
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
     } else {
-      console.warn(`IssuesListComponent: Issue with ID ${issueId} not found in current list. Attempting to fetch...`);
-      this.issueService.getIssue(issueId).subscribe({
-        next: specificIssue => {
-          if (specificIssue) {
-            this.selectIssue(specificIssue);
-          } else {
-            console.warn(`IssuesListComponent: Issue with ID ${issueId} not found via getIssue on navigation.`);
-            this.selectedIssue = null;
-          }
-        },
-        error: (err) => {
-          console.warn(`IssuesListComponent: Error fetching issue ${issueId} on navigation:`, err);
-          this.selectedIssue = null;
+      this.currentSortColumn = column;
+      this.sortDirection = 'asc';
+    }
+    this.applyCurrentSort();
+  }
+
+  private applyCurrentSort(): void {
+    if (!this.currentSortColumn || !this.issues || this.issues.length === 0) return;
+    const column = this.currentSortColumn;
+    this.issues.sort((a, b) => {
+      let valA: string | number = 0;
+      let valB: string | number = 0;
+      switch (column) {
+        case 'issue_type': valA = a.issue_type.order; valB = b.issue_type.order; break;
+        case 'severity':   valA = a.severity.order;   valB = b.severity.order;   break;
+        case 'priority':   valA = a.priority.order;   valB = b.priority.order;   break;
+        case 'status':     valA = a.status.order;     valB = b.status.order;     break;
+      }
+      let comparison = 0;
+      if (valA > valB) comparison = 1;
+      else if (valA < valB) comparison = -1;
+      return this.sortDirection === 'asc' ? comparison : comparison * -1;
+    });
+    this.issues = [...this.issues];
+  }
+
+  toggleAssigneeDropdown(issueId: number | string, event: MouseEvent): void {
+    event.stopPropagation();
+    if (this.activeAssigneeDropdownForIssueId === issueId) {
+      this.activeAssigneeDropdownForIssueId = null;
+    } else {
+      this.activeAssigneeDropdownForIssueId = issueId;
+    }
+  }
+
+  changeAssignee(targetIssue: Issue, newAssignee: UserLite | null, event: MouseEvent): void {
+    event.stopPropagation();
+    const payload: IssueUpdatePayload = {
+      assignee_id: newAssignee ? newAssignee.id : null
+    };
+    this.issueService.updateIssue(targetIssue.id, payload).subscribe({
+      next: (updatedIssue) => {
+        const index = this.issues.findIndex(iss => iss.id === updatedIssue.id);
+        if (index > -1) {
+          this.issues[index] = updatedIssue;
+          this.issues = [...this.issues];
         }
-      });
+      },
+      error: (err) => {
+        console.error('Failed to update assignee in list:', err);
+        alert('Error updating assignee. Please try again.');
+      },
+      complete: () => {
+        this.activeAssigneeDropdownForIssueId = null;
+      }
+    });
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    if (this.activeAssigneeDropdownForIssueId !== null) {
+      const targetElement = event.target as HTMLElement;
+      if (!targetElement.closest('.assignee-dropdown-trigger, .assignee-dropdown-menu')) {
+        this.activeAssigneeDropdownForIssueId = null;
+      }
     }
   }
 }

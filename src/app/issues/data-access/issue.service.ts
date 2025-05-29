@@ -15,7 +15,16 @@ export interface AttachmentDetail { id: number; issue: number; file: string; fil
 export interface Issue { id: number; title: string; description: string; status: StatusDetail; issue_type: IssueTypeDetail; severity: SeverityDetail; priority: PriorityDetail; creator: UserLite; assignee: UserLite | null; created_at: string; updated_at: string; deadline: string | null; watchers: UserLite[]; comments: CommentDetail[]; attachments: AttachmentDetail[]; }
 export interface IssueOptions { statusOptions: StatusDetail[]; typeOptions: IssueTypeDetail[]; severityOptions: SeverityDetail[]; priorityOptions: PriorityDetail[]; }
 export interface IssueUpdatePayload { title?: string; description?: string; status_id?: number; issue_type_id?: number; severity_id?: number; priority_id?: number; assignee_id?: number | null; deadline?: string | null; watchers_to_add?: number[]; watchers_to_remove?: number[]; }
-
+export interface NewIssueFormData {
+  title: string;
+  description: string;
+  status_id: number | null;
+  assignee_id: number | null;
+  type_id: number | null;
+  severity_id: number | null;
+  priority_id: number | null;
+  deadline?: string | null;
+}
 const MOCK_DELAY = 300;
 const mockUser1: UserLite = { id: 1, username: 'currentuser', first_name: 'Ana', last_name: 'Pérez', avatar_url: 'https://www.gravatar.com/avatar/ana?d=mp' };
 const mockUser2: UserLite = { id: 2, username: 'anotheruser', first_name: 'Luis', last_name: 'Gómez', avatar_url: 'https://www.gravatar.com/avatar/luis?d=mp' };
@@ -26,7 +35,6 @@ const mockTypeBug: IssueTypeDetail = { id: 1, name: 'Bug', color: 'bg-red-500', 
 const mockSeverityNormal: SeverityDetail = { id: 2, name: 'Normal', color: 'bg-blue-400', order: 2 };
 const mockPriorityNormal: PriorityDetail = { id: 2, name: 'Normal', color: 'bg-yellow-400', order: 2 };
 const mockProjectUsers: UserLite[] = [mockUser1, mockUser2, mockUser3];
-
 let mockIssuesDb: Issue[] = [
   {
     id: 123, // ID por defecto que IssuesComponent intenta cargar
@@ -181,6 +189,52 @@ export class IssueService {
       return of({...updatedIssue}).pipe(delay(MOCK_DELAY));
     }
     return throwError(() => new Error(`Mock Issue ${issueId} not found for update`)).pipe(delay(MOCK_DELAY));
+  }
+  createIssue(issueData: NewIssueFormData, creator: UserLite): Observable<Issue> {
+    console.log('IssueService: MOCK - Creating new issue with data:', issueData);
+
+    // Simular la creación de un nuevo issue
+    const newId = Math.max(0, ...mockIssuesDb.map(i => i.id)) + 1; // Generar un nuevo ID simple
+
+    // Necesitamos convertir los IDs de status, type, etc., a los objetos Detail completos
+    // Usaremos el helper findOptionById_typed que ya tenemos y los usuarios mock.
+    const status = issueData.status_id ? this.findOptionById_typed(issueData.status_id, 'statusOptions') : undefined;
+    const issue_type = issueData.type_id ? this.findOptionById_typed(issueData.type_id, 'typeOptions') : undefined;
+    const severity = issueData.severity_id ? this.findOptionById_typed(issueData.severity_id, 'severityOptions') : undefined;
+    const priority = issueData.priority_id ? this.findOptionById_typed(issueData.priority_id, 'priorityOptions') : undefined;
+    const assignee = issueData.assignee_id ? mockProjectUsers.find(u => u.id === issueData.assignee_id) || null : null;
+
+    if (!status || !issue_type || !severity || !priority) {
+      console.error('IssueService: MOCK - Could not find all required details for new issue (status, type, severity, priority).');
+      return throwError(() => new Error('Mock creation failed: Could not find required details for status, type, etc.'));
+    }
+
+    const newIssue: Issue = {
+      id: newId,
+      title: issueData.title,
+      description: issueData.description,
+      status: status,
+      issue_type: issue_type,
+      severity: severity,
+      priority: priority,
+      creator: creator, // El creador debería ser el usuario actual
+      assignee: assignee,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      deadline: issueData.deadline || null,
+      watchers: [creator], // Por defecto, el creador es un watcher
+      comments: [],
+      attachments: []
+    };
+
+    mockIssuesDb.push(newIssue); // Añadir a nuestra "base de datos" mock
+    console.log('IssueService: MOCK - New issue added to mockIssuesDb:', newIssue);
+    console.log('IssueService: MOCK - mockIssuesDb now contains:', mockIssuesDb.length, 'issues.');
+
+    return of({...newIssue}).pipe( // Devuelve una copia del nuevo issue
+      delay(MOCK_DELAY + 100),
+      tap(createdIssue => console.log('IssueService: MOCK - Emitting newly created issue:', createdIssue))
+    );
   }
   addAttachment(issueId: number, file: File): Observable<AttachmentDetail> {
     console.log(`IssueService: MOCK - Adding attachment "${file.name}" for issue ID ${issueId}`);
