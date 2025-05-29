@@ -1,0 +1,19 @@
+<div class="settings-area">
+  <nav class="settings-nav">
+    <ul>
+      <li *ngFor="let link of navLinks">
+        <a
+          [routerLink]="link.path"
+          routerLinkActive="active-link"
+          [routerLinkActiveOptions]="{ exact: true }"
+        >
+          {{ link.label }}
+        </a>
+      </li>
+    </ul>
+  </nav>
+
+  <main class="settings-content">
+    <router-outlet></router-outlet>
+  </main>
+</div>
