@@ -1,7 +1,7 @@
 // src/app/settings/feature/issue-types-admin/issue-types-admin.component.ts
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { SettingAdminListComponent } from './setting-admin-list.component';
+import { SettingAdminListComponent } from './setting-admin-list.component'; // Corrected path
 import { FormField } from '../../models/form-field.interface';
 import {
   IssueType,
@@ -27,8 +27,9 @@ const getIssueTypesDummy = (): Observable<IssueType[]> => {
 const addIssueTypeDummy = (data: CreateIssueTypeDTO): Observable<IssueType> => {
   const newIssueType: IssueType = {
     id: nextIssueTypeId++,
-    ...data,
-    order: data.order || DUMMY_ISSUE_TYPES.length * 10 + 10,
+    name: data['name'], // Explicitly assign name
+    color: data['color'], // Explicitly assign color
+    order: data['order'] || DUMMY_ISSUE_TYPES.length * 10 + 10, // Use bracket notation for order
   };
   DUMMY_ISSUE_TYPES.push(newIssueType);
   return of(newIssueType).pipe(delay(300));

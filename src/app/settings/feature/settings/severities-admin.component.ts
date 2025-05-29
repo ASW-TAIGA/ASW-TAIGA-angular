@@ -1,7 +1,7 @@
 // src/app/settings/feature/severities-admin/severities-admin.component.ts
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { SettingAdminListComponent } from './setting-admin-list.component';
+import { SettingAdminListComponent } from './setting-admin-list.component'; // Corrected path
 import { FormField } from '../../models/form-field.interface';
 import {
   Severity,
@@ -28,8 +28,9 @@ const getSeveritiesDummy = (): Observable<Severity[]> => {
 const addSeverityDummy = (data: CreateSeverityDTO): Observable<Severity> => {
   const newSeverity: Severity = {
     id: nextSeverityId++,
-    ...data,
-    order: data.order || DUMMY_SEVERITIES.length * 10 + 10,
+    name: data['name'], // Explicitly assign name
+    color: data['color'], // Explicitly assign color
+    order: data['order'] || DUMMY_SEVERITIES.length * 10 + 10, // Use bracket notation for order
   };
   DUMMY_SEVERITIES.push(newSeverity);
   return of(newSeverity).pipe(delay(300));

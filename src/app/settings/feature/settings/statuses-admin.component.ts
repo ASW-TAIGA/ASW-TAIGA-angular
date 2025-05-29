@@ -1,7 +1,10 @@
 // src/app/settings/feature/statuses-admin/statuses-admin.component.ts
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { SettingAdminListComponent } from './setting-admin-list.component'; // Corrected path
+import { SettingAdminListComponent } from './setting-admin-list.component'; //
+//
+// Corrected path
+
 import { FormField } from '../../models/form-field.interface';
 import {
   EpicStatus,
@@ -74,7 +77,7 @@ const updateEpicStatusDummy = (
       ...DUMMY_EPIC_STATUSES[index],
       ...data,
       slug:
-        data['name']?.toLowerCase().replace(/\s/g, '-') || // Modified here
+        data.name?.toLowerCase().replace(/\s/g, '-') ||
         DUMMY_EPIC_STATUSES[index].slug,
     };
     DUMMY_EPIC_STATUSES[index] = updatedStatus;
@@ -155,7 +158,7 @@ const updateUserStoryStatusDummy = (
       ...DUMMY_USER_STORY_STATUSES[index],
       ...data,
       slug:
-        data['name']?.toLowerCase().replace(/\s/g, '-') || // Modified here
+        data.name?.toLowerCase().replace(/\s/g, '-') ||
         DUMMY_USER_STORY_STATUSES[index].slug,
     };
     DUMMY_USER_STORY_STATUSES[index] = updatedStatus;
@@ -232,7 +235,7 @@ const updateIssueStatusDummy = (
       ...DUMMY_ISSUE_STATUSES[index],
       ...data,
       slug:
-        data['name']?.toLowerCase().replace(/\s/g, '-') || // Modified here
+        data.name?.toLowerCase().replace(/\s/g, '-') ||
         DUMMY_ISSUE_STATUSES[index].slug,
     };
     DUMMY_ISSUE_STATUSES[index] = updatedStatus;
@@ -300,7 +303,7 @@ const updateTaskStatusDummy = (
       ...DUMMY_TASK_STATUSES[index],
       ...data,
       slug:
-        data['name']?.toLowerCase().replace(/\s/g, '-') || // Modified here
+        data.name?.toLowerCase().replace(/\s/g, '-') ||
         DUMMY_TASK_STATUSES[index].slug,
     };
     DUMMY_TASK_STATUSES[index] = updatedStatus;

@@ -1,8 +1,10 @@
+// src/app/settings/models/settings.interfaces.ts
 export interface BaseSetting {
   id: number;
   name: string;
   color: string;
   order: number;
+  [key: string]: any; // Add this line to allow dynamic property access
 }
 
 export interface BaseStatus extends BaseSetting {

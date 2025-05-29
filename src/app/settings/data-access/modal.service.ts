@@ -15,7 +15,7 @@ import {
 } from '@angular/cdk/overlay';
 import { Portal, ComponentPortal } from '@angular/cdk/portal';
 import { take } from 'rxjs';
-import { TailwindModalComponent } from '../ui/tailwind-modal/tailwind-modal.component';
+import { TailwindModalComponent } from '../../shared/ui/tailwind-modal.component';
 
 export interface ModalConfig<T = any> {
   data?: T;

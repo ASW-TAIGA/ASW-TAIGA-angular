@@ -1,7 +1,7 @@
 // src/app/settings/feature/priorities-admin/priorities-admin.component.ts
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { SettingAdminListComponent } from './setting-admin-list.component';
+import { SettingAdminListComponent } from './setting-admin-list.component'; // Corrected path
 import { FormField } from '../../models/form-field.interface';
 import {
   Priority,
@@ -28,8 +28,9 @@ const getPrioritiesDummy = (): Observable<Priority[]> => {
 const addPriorityDummy = (data: CreatePriorityDTO): Observable<Priority> => {
   const newPriority: Priority = {
     id: nextPriorityId++,
-    ...data,
-    order: data.order || DUMMY_PRIORITIES.length * 10 + 10,
+    name: data['name'], // Explicitly assign name
+    color: data['color'], // Explicitly assign color
+    order: data['order'] || DUMMY_PRIORITIES.length * 10 + 10, // Use bracket notation for order
   };
   DUMMY_PRIORITIES.push(newPriority);
   return of(newPriority).pipe(delay(300));
