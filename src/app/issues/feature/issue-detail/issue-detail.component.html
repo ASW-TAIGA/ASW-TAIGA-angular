@@ -10,13 +10,17 @@
         <button
           type="button"
           title="Previous Issue"
-          class="p-1.5 text-green-600 hover:text-green-700 hover:bg-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-green-500">
+          class="p-1.5 text-green-600 hover:text-green-700 hover:bg-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          [disabled]="!canGoPrevious"
+          (click)="onNavigateToPrevious()">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 md:w-5 md:h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" /></svg>
         </button>
         <button
           type="button"
           title="Next Issue"
-          class="p-1.5 text-green-600 hover:text-green-700 hover:bg-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-green-500">
+          class="p-1.5 text-green-600 hover:text-green-700 hover:bg-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          [disabled]="!canGoNext"
+          (click)="onNavigateToNext()">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 md:w-5 md:h-5"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
         </button>
       </div>
@@ -41,7 +45,7 @@
           <img *ngIf="issue.creator.avatar_url"
                [src]="issue.creator.avatar_url"
                alt="{{issue.creator.username}}'s avatar"
-               class="w-7 h-7 rounded-full group-hover:ring-2 group-hover:ring-green-300">
+               class="w-11 h-11 rounded-full group-hover:ring-2 group-hover:ring-green-300">
           <div *ngIf="!issue.creator.avatar_url"
                class="w-11 h-11 rounded-full bg-gray-400 flex items-center justify-center text-white text-sm font-semibold group-hover:ring-2 group-hover:ring-green-300"
                [title]="issue.creator.username">
@@ -53,14 +57,41 @@
   </header>
 
   <section class="mt-4">
-    <div *ngIf="issue.description; else noDescription" class="prose prose-sm max-w-none text-gray-700">
-      <pre class="whitespace-pre-wrap font-sans">{{ issue.description }}</pre>
+    <div *ngIf="!isEditingDescription">
+      <div
+        (click)="startEditDescription()"
+        class="prose prose-sm max-w-none text-gray-700 cursor-pointer hover:bg-gray-50 p-3 rounded-md min-h-[80px] border border-transparent hover:border-gray-300"
+        title="Click to edit description">
+        <pre *ngIf="issue.description; else noDescriptionBlock" class="whitespace-pre-wrap font-sans bg-transparent p-0 m-0">{{ issue.description }}</pre>
+        <ng-template #noDescriptionBlock>
+          <p class="text-gray-500 italic">No description provided. Click to add.</p>
+        </ng-template>
+      </div>
     </div>
-    <ng-template #noDescription>
-      <p class="text-gray-500 italic">No description provided.</p>
-    </ng-template>
-  </section>
 
+    <div *ngIf="isEditingDescription">
+      <textarea
+        [(ngModel)]="editableDescription"
+        rows="8"
+        class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm font-sans"
+        placeholder="Enter issue description...">
+      </textarea>
+      <div class="mt-3 flex justify-end gap-3">
+        <button
+          type="button"
+          (click)="cancelEditDescription()"
+          class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500">
+          Cancel
+        </button>
+        <button
+          type="button"
+          (click)="saveDescription()"
+          class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500">
+          Save
+        </button>
+      </div>
+    </div>
+  </section>
   <section class="mt-6 pt-4">
     <h2 class="text-lg font-semibold text-gray-700 mb-3">Attachments ({{issue.attachments.length || 0}})</h2>
     <div class="p-4 bg-gray-50 rounded text-center text-gray-500">
