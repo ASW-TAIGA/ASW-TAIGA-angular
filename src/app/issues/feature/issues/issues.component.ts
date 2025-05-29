@@ -1,3 +1,4 @@
+
 // src/app/issues/feature/issues/issues.component.ts
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -13,17 +14,24 @@ import {
 import { Observable, of } from 'rxjs';
 import { tap } from 'rxjs/operators';
 
+import { Component, HostListener } from '@angular/core';
+import { IssueSidebarComponent } from './issue-sidebar.component';
+import { IssuesListComponent } from './issues-list/issues-list.component';
+
+
 @Component({
   selector: 'app-issues',
   standalone: true,
+
   imports: [
     CommonModule,
     IssueSidebarComponent,
     IssueDetailComponent
   ],
   templateUrl: './issues.component.html',
-  styleUrl: './issues.component.css'
+  styleUrl: './issues.component.css',
 })
+
 export class IssuesComponent implements OnInit {
   private issueService = inject(IssueService);
 
@@ -124,3 +132,4 @@ export class IssuesComponent implements OnInit {
     });
   }
 }
+
