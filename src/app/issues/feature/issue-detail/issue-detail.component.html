@@ -12,7 +12,7 @@
           title="Previous Issue"
           class="p-1.5 text-green-600 hover:text-green-700 hover:bg-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
           [disabled]="!canGoPrevious"
-          (click)="onNavigateToPrevious()">
+          (click)="onNavigateToPreviousClick()">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 md:w-5 md:h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" /></svg>
         </button>
         <button
@@ -20,7 +20,7 @@
           title="Next Issue"
           class="p-1.5 text-green-600 hover:text-green-700 hover:bg-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
           [disabled]="!canGoNext"
-          (click)="onNavigateToNext()">
+          (click)="onNavigateToNextClick()">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 md:w-5 md:h-5"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
         </button>
       </div>
@@ -32,7 +32,7 @@
             <a [routerLink]="['/users', issue.creator.id]"
                class="text-green-600 hover:text-green-700 hover:underline"
                [title]="'View profile: ' + issue.creator.username">
-              {{ issue.creator.first_name }} {{ issue.creator.last_name }}
+              <span>{{ issue.creator.first_name }} {{ issue.creator.last_name }}</span>
             </a>
           </div>
           <div class="text-sm text-gray-500 mt-0.5">
@@ -45,9 +45,9 @@
           <img *ngIf="issue.creator.avatar_url"
                [src]="issue.creator.avatar_url"
                alt="{{issue.creator.username}}'s avatar"
-               class="w-11 h-11 rounded-full group-hover:ring-2 group-hover:ring-green-300">
+               class="w-7 h-7 rounded-full group-hover:ring-2 group-hover:ring-green-300">
           <div *ngIf="!issue.creator.avatar_url"
-               class="w-11 h-11 rounded-full bg-gray-400 flex items-center justify-center text-white text-sm font-semibold group-hover:ring-2 group-hover:ring-green-300"
+               class="w-7 h-7 rounded-full bg-gray-400 flex items-center justify-center text-white text-sm font-semibold group-hover:ring-2 group-hover:ring-green-300"
                [title]="issue.creator.username">
             {{ issue.creator.first_name ? issue.creator.first_name[0].toUpperCase() : '' }}{{ issue.creator.last_name ? issue.creator.last_name[0].toUpperCase() : '' }}
           </div>
@@ -68,7 +68,6 @@
         </ng-template>
       </div>
     </div>
-
     <div *ngIf="isEditingDescription">
       <textarea
         [(ngModel)]="editableDescription"
@@ -92,18 +91,164 @@
       </div>
     </div>
   </section>
+
   <section class="mt-6 pt-4">
-    <h2 class="text-lg font-semibold text-gray-700 mb-3">Attachments ({{issue.attachments.length || 0}})</h2>
-    <div class="p-4 bg-gray-50 rounded text-center text-gray-500">
-      Attachments feature coming soon.
+    <div class="flex justify-between items-center mb-3">
+      <h2 class="text-lg font-semibold text-gray-700">Attachments ({{ issue.attachments.length || 0 }})</h2>
+      <button
+        type="button"
+        (click)="triggerFileUpload()"
+        class="px-3 py-1.5 text-xs font-medium text-white bg-green-600 border border-transparent rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-green-500">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline-block mr-1.5 -ml-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+        </svg>
+        Upload File
+      </button>
     </div>
+    <input type="file" #fileInput class="hidden" (change)="onFileSelected($event)" />
+    <div *ngIf="issue.attachments && issue.attachments.length > 0; else noAttachmentsBlock" class="space-y-3">
+      <div *ngFor="let attachment of issue.attachments"
+           class="p-3 bg-gray-50 hover:bg-gray-100 rounded-md flex justify-between items-center transition-colors duration-150">
+        <div class="flex items-center min-w-0 mr-2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500 mr-2.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+          </svg>
+          <a [href]="attachment.file_url"
+             target="_blank"
+             rel="noopener noreferrer"
+             [download]="attachment.file_name"
+             class="text-sm text-indigo-600 hover:text-indigo-800 hover:underline font-medium truncate"
+             [title]="attachment.file_name">
+            {{ attachment.file_name }}
+          </a>
+        </div>
+        <div class="flex items-center flex-shrink-0">
+          <span class="text-xs text-gray-600 mr-3">{{ attachment.file_size }}</span>
+          <button
+            type="button"
+            (click)="confirmDeleteAttachment(attachment); $event.stopPropagation();"
+            title="Delete attachment {{ attachment.file_name }}"
+            class="p-1 text-red-500 hover:text-red-700 hover:bg-red-100 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-red-500">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+    <ng-template #noAttachmentsBlock>
+      <div class="p-4 bg-gray-50 rounded text-center text-gray-500 italic text-sm">
+        No attachments for this issue.
+      </div>
+    </ng-template>
   </section>
 
   <section class="mt-6 pt-4 border-t border-gray-200">
-    <h2 class="text-lg font-semibold text-gray-700 mb-3">Comments ({{issue.comments.length || 0}})</h2>
-    <div class="p-4 bg-gray-50 rounded text-center text-gray-500">
-      Comments feature coming soon.
+    <h2 class="text-lg font-semibold text-gray-700 mb-4">Comments ({{ sortedComments.length || 0 }})</h2>
+
+    <div class="mb-6">
+      <textarea
+        [(ngModel)]="newCommentText"
+        rows="3"
+        class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm font-sans"
+        placeholder="Add a comment...">
+      </textarea>
+      <div class="mt-2 text-right">
+        <button
+          type="button"
+          (click)="postNewComment()"
+          [disabled]="!newCommentText.trim()"
+          class="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed">
+          Post Comment
+        </button>
+      </div>
     </div>
+
+    <div *ngIf="sortedComments.length > 0; else noCommentsYetBlock" class="space-y-5">
+      <div *ngFor="let comment of sortedComments"
+           class="comment-item flex items-start gap-x-3 py-4 border-b border-gray-100 last:border-b-0">
+        <a [routerLink]="['/users', comment.author.id]" class="flex-shrink-0 mt-1">
+          <img *ngIf="comment.author.avatar_url"
+               [src]="comment.author.avatar_url"
+               alt="{{comment.author.username}}'s avatar"
+               class="h-8 w-8 rounded-full">
+          <div *ngIf="!comment.author.avatar_url"
+               class="h-8 w-8 rounded-full bg-gray-400 flex items-center justify-center text-white text-xs font-semibold"
+               [title]="comment.author.username">
+            {{ comment.author.first_name ? comment.author.first_name[0].toUpperCase() : '' }}{{ comment.author.last_name ? comment.author.last_name[0].toUpperCase() : '' }}
+          </div>
+        </a>
+        <div class="flex-grow">
+          <div *ngIf="editingCommentId !== comment.id">
+            <div class="flex items-baseline justify-between">
+              <div class="text-sm">
+                <a [routerLink]="['/users', comment.author.id]"
+                   class="font-semibold text-gray-800 hover:underline">
+                  {{ comment.author.first_name }} {{ comment.author.last_name }}
+                </a>
+                <span class="text-gray-500 ml-2 text-xs" [title]="comment.created_at | date:'fullDate' +' at '+ (comment.created_at | date:'shortTime')">
+                  {{ comment.created_at | date:'mediumDate' }}
+                  <span *ngIf="comment.updated_at !== comment.created_at"
+                        class="italic text-gray-400"
+                        [title]="'Edited: ' + (comment.updated_at | date:'mediumDate') +' at '+ (comment.updated_at | date:'shortTime')">
+                        (edited)
+                  </span>
+                </span>
+              </div>
+              <div *ngIf="canManageComment(comment)" class="flex-shrink-0 space-x-1 self-start">
+                <button (click)="startEditComment(comment)" title="Edit comment" class="p-1 text-gray-400 hover:text-indigo-600 focus:outline-none rounded-full hover:bg-gray-100">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" /></svg>
+                </button>
+                <button (click)="confirmDeleteComment(comment)" title="Delete comment" class="p-1 text-gray-400 hover:text-red-600 focus:outline-none rounded-full hover:bg-gray-100">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                </button>
+              </div>
+            </div>
+            <div class="mt-1 text-sm text-gray-700 prose prose-sm max-w-none">
+              <pre class="whitespace-pre-wrap font-sans p-0 m-0 bg-transparent">{{ comment.text }}</pre>
+            </div>
+          </div>
+
+          <div *ngIf="editingCommentId === comment.id">
+            <div class="text-sm mb-2">
+              <a [routerLink]="['/users', comment.author.id]"
+                 class="font-semibold text-gray-800 hover:underline">
+                {{ comment.author.first_name }} {{ comment.author.last_name }}
+              </a>
+              <span class="text-gray-500 ml-2 text-xs" [title]="comment.created_at | date:'fullDate' +' at '+ (comment.created_at | date:'shortTime')">
+                {{ comment.created_at | date:'mediumDate' }}
+                <span *ngIf="comment.updated_at !== comment.created_at" class="italic text-gray-400" [title]="'Edited: ' + (comment.updated_at | date:'fullDate') +' at '+ (comment.updated_at | date:'shortTime')">(edited)</span>
+              </span>
+            </div>
+            <textarea
+              [(ngModel)]="editableCommentText"
+              rows="3"
+              class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm font-sans"
+              placeholder="Edit comment...">
+            </textarea>
+            <div class="mt-2 flex justify-end gap-2">
+              <button
+                type="button"
+                (click)="cancelEditComment()"
+                class="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500">
+                Cancel
+              </button>
+              <button
+                type="button"
+                (click)="saveEditComment(comment)"
+                class="px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500">
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <ng-template #noCommentsYetBlock>
+      <div class="p-4 bg-gray-50 rounded text-center text-gray-500 italic text-sm">
+        No comments yet. Be the first to comment!
+      </div>
+    </ng-template>
   </section>
 </div>
 

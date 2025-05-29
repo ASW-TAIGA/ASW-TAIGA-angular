@@ -1,53 +1,42 @@
-
 <div class="issues-container flex h-screen overflow-hidden">
 
   <div class="issue-main-content flex-grow overflow-y-auto">
-    <ng-container *ngIf="currentIssue$ | async as issue; else noIssueSelected">
+    <ng-container *ngIf="currentIssue$ | async as issue; else noIssueSelectedInDetail">
       <app-issue-detail
         [issue]="issue"
+        [currentUser]="currentUserInput"
         [canGoPrevious]="canGoPrevious"
         [canGoNext]="canGoNext"
         (issuePropertyChange)="handleIssueUpdate($event)"
-        (navigateToPrevious)="onNavigateToPreviousRequested()"
-        (navigateToNext)="onNavigateToNextRequested()">
+        (navigateToPrevious)="onNavigateToPreviousRequestedFromDetail()"
+        (navigateToNext)="onNavigateToNextRequestedFromDetail()">
       </app-issue-detail>
     </ng-container>
-    <ng-template #noIssueSelected>
+    <ng-template #noIssueSelectedInDetail>
       <div class="p-6 text-center text-gray-500 italic h-full flex items-center justify-center">
-        <p *ngIf="!(currentIssue$ | async)">Loading issue or no issue selected...</p>
+        <p>Loading issue details or no issue to display...</p>
       </div>
     </ng-template>
   </div>
 
   <div class="sidebar-wrapper w-[416px] flex-shrink-0 border-l border-gray-200 h-full overflow-y-auto sticky top-0">
-    <ng-container *ngIf="currentIssue$ | async as issue">
-      <ng-container *ngIf="issueOptions$ | async as options">
-        <ng-container *ngIf="currentUser$ | async as resolvedCurrentUser">
-          <ng-container *ngIf="allProjectUsers$ | async as resolvedAllProjectUsers">
-            <app-issue-sidebar
-              [issue]="issue"
-              [typeOptions]="options.typeOptions"
-              [severityOptions]="options.severityOptions"
-              [priorityOptions]="options.priorityOptions"
-              [statusOptions]="options.statusOptions"
-              [currentUser]="resolvedCurrentUser"
-              [allProjectUsers]="resolvedAllProjectUsers"
-              (issuePropertyChange)="handleIssueUpdate($event)"
-              (deleteIssueInitiated)="handleDeleteIssue($event)">
-            </app-issue-sidebar>
-          </ng-container>
-        </ng-container>
+    <ng-container *ngIf="(currentIssue$ | async) as issue">
+      <ng-container *ngIf="(issueOptions$ | async) as options">
+        <app-issue-sidebar
+          *ngIf="issue && options && currentUserInput && allProjectUsersInput.length > 0" [issue]="issue"
+          [typeOptions]="options.typeOptions"
+          [severityOptions]="options.severityOptions"
+          [priorityOptions]="options.priorityOptions"
+          [statusOptions]="options.statusOptions"
+          [currentUser]="currentUserInput"
+          [allProjectUsers]="allProjectUsersInput"
+          (issuePropertyChange)="handleIssueUpdate($event)"
+          (deleteIssueInitiated)="handleDeleteIssue($event)">
+        </app-issue-sidebar>
       </ng-container>
     </ng-container>
-    <div *ngIf="!(currentIssue$ | async)" class="p-6 text-center text-gray-400 italic flex items-center justify-center h-full">
-      <div>
-        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-          <path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-        </svg>
-        <h3 class="mt-2 text-sm font-medium text-gray-900">No issue selected</h3>
-        <p class="mt-1 text-sm text-gray-500">Select an issue to see its details and options.</p>
-      </div>
-    </div>
-    <app-issues-list></app-issues-list>
-  </div>
 
+    <div *ngIf="!(currentIssue$ | async) || !currentUserInput" class="p-6 text-center text-gray-400 italic flex items-center justify-center h-full">
+    </div>
+  </div>
+</div>

@@ -28,8 +28,35 @@ const mockPriorityNormal: PriorityDetail = { id: 2, name: 'Normal', color: 'bg-y
 const mockProjectUsers: UserLite[] = [mockUser1, mockUser2, mockUser3];
 
 let mockIssuesDb: Issue[] = [
-  { id: 123, title: 'Issue de prueba 123: Arreglar el login', description: 'La descripción inicial del issue 123 sobre el login. Necesita más detalles.', status: mockStatusOpen, issue_type: mockTypeBug, severity: mockSeverityNormal, priority: mockPriorityNormal, creator: mockUser1, assignee: mockUser2, created_at: new Date(Date.now() - 86400000 * 2).toISOString(), updated_at: new Date(Date.now() - 86400000).toISOString(), deadline: null, watchers: [mockUser1, mockUser3], comments: [ {id: 1, author: mockUser2, text: "Estoy en ello.", created_at: new Date(Date.now() - 3600000 * 5).toISOString(), updated_at: new Date(Date.now() - 3600000 * 5).toISOString()}, {id: 2, author: mockUser1, text: "¡Genial, gracias!", created_at: new Date(Date.now() - 3600000 * 4).toISOString(), updated_at: new Date(Date.now() - 3600000 * 4).toISOString()} ], attachments: [] },
-  { id: 456, title: 'Issue de prueba 456: Implementar nueva característica', description: 'Descripción para la nueva característica X.', status: mockStatusInProgress, issue_type: { id: 2, name: 'Feature', color: 'bg-blue-500', order: 2 }, severity: { id: 1, name: 'Low', color: 'bg-green-400', order: 1 }, priority: { id: 1, name: 'Low', color: 'bg-green-300', order: 1 }, creator: mockUser2, assignee: null, created_at: new Date(Date.now() - 86400000 * 3).toISOString(), updated_at: new Date().toISOString(), deadline: new Date(Date.now() + 86400000 * 7).toISOString(), watchers: [mockUser2], comments: [], attachments: [] }
+  {
+    id: 123, // ID por defecto que IssuesComponent intenta cargar
+    title: 'Issue de prueba 123: Arreglar el login',
+    description: 'La descripción inicial DEL MOCK para el issue 123 sobre el login.',
+    status: mockStatusOpen, // Asegúrate que estas variables mock estén definidas arriba
+    issue_type: mockTypeBug, // Asegúrate que estas variables mock estén definidas arriba
+    severity: mockSeverityNormal, // Asegúrate que estas variables mock estén definidas arriba
+    priority: mockPriorityNormal, // Asegúrate que estas variables mock estén definidas arriba
+    creator: mockUser1,
+    assignee: mockUser2,
+    created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
+    updated_at: new Date(Date.now() - 86400000).toISOString(),
+    deadline: null,
+    watchers: [mockUser1, mockUser3],
+    comments: [
+      {id: 1, author: mockUser2, text: "Estoy en ello.", created_at: new Date(Date.now() - 3600000 * 5).toISOString(), updated_at: new Date(Date.now() - 3600000 * 5).toISOString()},
+      {id: 2, author: mockUser1, text: "¡Genial, gracias!", created_at: new Date(Date.now() - 3600000 * 4).toISOString(), updated_at: new Date(Date.now() - 3600000 * 4).toISOString()}
+    ],
+    // ----> ASEGÚRATE DE QUE ESTA LÍNEA ESTÉ ASÍ <----
+    attachments: [{
+      id: 1,
+      issue: 123,
+      file: "/uploads/dummy.pdf",
+      file_name: "dummy.pdf",
+      file_size: "1.2MB",
+      file_url: "/uploads/dummy.pdf",
+      uploaded_at: new Date().toISOString()
+    }]
+  },{ id: 456, title: 'Issue de prueba 456: Implementar nueva característica', description: 'Descripción para la nueva característica X.', status: mockStatusInProgress, issue_type: { id: 2, name: 'Feature', color: 'bg-blue-500', order: 2 }, severity: { id: 1, name: 'Low', color: 'bg-green-400', order: 1 }, priority: { id: 1, name: 'Low', color: 'bg-green-300', order: 1 }, creator: mockUser2, assignee: null, created_at: new Date(Date.now() - 86400000 * 3).toISOString(), updated_at: new Date().toISOString(), deadline: new Date(Date.now() + 86400000 * 7).toISOString(), watchers: [mockUser2], comments: [], attachments: [] }
 ];
 
 @Injectable({
@@ -56,7 +83,16 @@ export class IssueService {
     const options = this.getMockedIssueOptions();
     return of(options).pipe(delay(MOCK_DELAY));
   }
-
+  getIssues(): Observable<Issue[]> {
+    console.log('IssueService: Fetching all issues (MOCK)');
+    // Devolvemos una copia de la base de datos mock para simular inmutabilidad
+    // y que cada llamada obtenga el estado actual de mockIssuesDb.
+    return of(mockIssuesDb.map(issue => ({...issue, attachments: [...issue.attachments], comments: [...issue.comments], watchers: [...issue.watchers]})))
+      .pipe(
+        delay(MOCK_DELAY), // Simular un pequeño retraso
+        tap(issues => console.log(`IssueService: Emitting ${issues.length} issues (MOCK)`))
+      );
+  }
   getIssue(issueId: string | number): Observable<Issue> {
     console.log(`IssueService: Fetching issue ${issueId} (MOCK)`);
     const numericId = Number(issueId);
@@ -146,7 +182,41 @@ export class IssueService {
     }
     return throwError(() => new Error(`Mock Issue ${issueId} not found for update`)).pipe(delay(MOCK_DELAY));
   }
+  addAttachment(issueId: number, file: File): Observable<AttachmentDetail> {
+    console.log(`IssueService: MOCK - Adding attachment "${file.name}" for issue ID ${issueId}`);
 
+    // Simular la subida del archivo y la respuesta del backend.
+    // En una implementación real, aquí harías una petición POST con FormData.
+    // El backend guardaría el archivo y devolvería los detalles del adjunto.
+
+    const newAttachmentId = Math.floor(Math.random() * 10000) + 1000; // ID aleatorio para el mock
+    const mockFileUrl = `/uploads/mock/${file.name.replace(/\s+/g, '_')}`; // URL simulada
+
+    const newAttachment: AttachmentDetail = {
+      id: newAttachmentId,
+      issue: issueId,
+      file: mockFileUrl, // En un backend real, esto podría ser una ruta interna o un identificador del archivo
+      file_name: file.name,
+      file_size: `${(file.size / 1024).toFixed(2)} KB`, // Formatear tamaño
+      file_url: mockFileUrl, // URL pública para descarga
+      uploaded_at: new Date().toISOString()
+    };
+
+    // Simular la adición a la "base de datos" mock
+    const issueIndex = mockIssuesDb.findIndex(issue => issue.id === issueId);
+    if (issueIndex > -1) {
+      mockIssuesDb[issueIndex].attachments.push(newAttachment);
+      console.log('IssueService: MOCK - Attachment added to mockIssuesDb:', newAttachment);
+      console.log('IssueService: MOCK - Current attachments for issue', issueId, mockIssuesDb[issueIndex].attachments);
+    } else {
+      console.warn(`IssueService: MOCK - Issue with ID ${issueId} not found in mockIssuesDb for adding attachment.`);
+    }
+
+    return of(newAttachment).pipe(
+      delay(MOCK_DELAY + 200), // Simular un poco más de retraso para la subida
+      tap(attachment => console.log('IssueService: MOCK - Emitting new attachment:', attachment))
+    );
+  }
   getProjectUsers(): Observable<UserLite[]> {
     console.log('IssueService: Fetching project users (MOCK)');
     return of([...mockProjectUsers]).pipe(delay(MOCK_DELAY));
@@ -156,7 +226,28 @@ export class IssueService {
     console.log('IssueService: Fetching current user (MOCK)');
     return of({...mockUser1}).pipe(delay(MOCK_DELAY));
   }
+  deleteAttachment(issueId: number, attachmentId: number): Observable<void> {
+    console.log(`IssueService: MOCK - Deleting attachment ID ${attachmentId} from issue ID ${issueId}`);
+    const issueIndex = mockIssuesDb.findIndex(issue => issue.id === issueId);
 
+    if (issueIndex > -1) {
+      const originalAttachmentCount = mockIssuesDb[issueIndex].attachments.length;
+      mockIssuesDb[issueIndex].attachments = mockIssuesDb[issueIndex].attachments.filter(
+        att => att.id !== attachmentId
+      );
+
+      if (mockIssuesDb[issueIndex].attachments.length < originalAttachmentCount) {
+        console.log(`IssueService: MOCK - Attachment ${attachmentId} deleted from mockIssuesDb for issue ${issueId}. New count: ${mockIssuesDb[issueIndex].attachments.length}`);
+        return of(undefined).pipe(delay(MOCK_DELAY)); // Simula éxito sin contenido
+      } else {
+        console.warn(`IssueService: MOCK - Attachment ${attachmentId} not found in issue ${issueId} for deletion.`);
+        return throwError(() => new Error(`Mock Attachment ${attachmentId} not found in issue ${issueId}`)).pipe(delay(MOCK_DELAY));
+      }
+    } else {
+      console.warn(`IssueService: MOCK - Issue ${issueId} not found for deleting attachment.`);
+      return throwError(() => new Error(`Mock Issue ${issueId} not found`)).pipe(delay(MOCK_DELAY));
+    }
+  }
   deleteIssue(issueId: string | number): Observable<void> {
     console.log(`IssueService: Deleting issue ${issueId} (MOCK)`);
     const numericId = Number(issueId);
