@@ -13,6 +13,11 @@ import {
 import { Observable, BehaviorSubject, of, Subscription } from 'rxjs';
 import { tap } from 'rxjs/operators';
 
+import { Component, HostListener } from '@angular/core';
+import { IssueSidebarComponent } from './issue-sidebar.component';
+import { IssuesListComponent } from './issues-list/issues-list.component';
+
+
 @Component({
   selector: 'app-issues',
   standalone: true,
