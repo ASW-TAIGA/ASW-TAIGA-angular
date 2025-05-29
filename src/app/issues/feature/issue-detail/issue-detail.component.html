@@ -1,0 +1,81 @@
+<div *ngIf="issue" class="p-6 md:p-8 space-y-6 bg-white rounded-lg shadow-md h-full overflow-y-auto">
+  <header class="pb-4 border-b border-gray-200 flex justify-between items-start gap-x-4">
+    <div class="flex-grow min-w-0">
+      <h1 class="text-2xl md:text-3xl font-bold text-gray-800 break-words">{{ issue.title }}</h1>
+      <p class="text-base text-green-600 mt-2">Issue #{{ issue.id }}</p>
+    </div>
+
+    <div class="flex-shrink-0 text-right space-y-2">
+      <div class="flex justify-end gap-1">
+        <button
+          type="button"
+          title="Previous Issue"
+          class="p-1.5 text-green-600 hover:text-green-700 hover:bg-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-green-500">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 md:w-5 md:h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" /></svg>
+        </button>
+        <button
+          type="button"
+          title="Next Issue"
+          class="p-1.5 text-green-600 hover:text-green-700 hover:bg-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-green-500">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 md:w-5 md:h-5"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
+        </button>
+      </div>
+
+      <div class="mt-1 flex items-center justify-end gap-2">
+        <div class="text-right">
+          <div class="text-base text-gray-700" [title]="issue.creator.username">
+            <span class="font-medium text-gray-600">By:</span>
+            <a [routerLink]="['/users', issue.creator.id]"
+               class="text-green-600 hover:text-green-700 hover:underline"
+               [title]="'View profile: ' + issue.creator.username">
+              {{ issue.creator.first_name }} {{ issue.creator.last_name }}
+            </a>
+          </div>
+          <div class="text-sm text-gray-500 mt-0.5">
+            <span class="font-medium">On:</span> {{ issue.created_at | date:'mediumDate' }}
+          </div>
+        </div>
+        <a [routerLink]="['/users', issue.creator.id]"
+           class="flex-shrink-0 group"
+           [title]="'View profile: ' + issue.creator.username">
+          <img *ngIf="issue.creator.avatar_url"
+               [src]="issue.creator.avatar_url"
+               alt="{{issue.creator.username}}'s avatar"
+               class="w-7 h-7 rounded-full group-hover:ring-2 group-hover:ring-green-300">
+          <div *ngIf="!issue.creator.avatar_url"
+               class="w-11 h-11 rounded-full bg-gray-400 flex items-center justify-center text-white text-sm font-semibold group-hover:ring-2 group-hover:ring-green-300"
+               [title]="issue.creator.username">
+            {{ issue.creator.first_name ? issue.creator.first_name[0].toUpperCase() : '' }}{{ issue.creator.last_name ? issue.creator.last_name[0].toUpperCase() : '' }}
+          </div>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <section class="mt-4">
+    <div *ngIf="issue.description; else noDescription" class="prose prose-sm max-w-none text-gray-700">
+      <pre class="whitespace-pre-wrap font-sans">{{ issue.description }}</pre>
+    </div>
+    <ng-template #noDescription>
+      <p class="text-gray-500 italic">No description provided.</p>
+    </ng-template>
+  </section>
+
+  <section class="mt-6 pt-4">
+    <h2 class="text-lg font-semibold text-gray-700 mb-3">Attachments ({{issue.attachments.length || 0}})</h2>
+    <div class="p-4 bg-gray-50 rounded text-center text-gray-500">
+      Attachments feature coming soon.
+    </div>
+  </section>
+
+  <section class="mt-6 pt-4 border-t border-gray-200">
+    <h2 class="text-lg font-semibold text-gray-700 mb-3">Comments ({{issue.comments.length || 0}})</h2>
+    <div class="p-4 bg-gray-50 rounded text-center text-gray-500">
+      Comments feature coming soon.
+    </div>
+  </section>
+</div>
+
+<div *ngIf="!issue" class="p-6 text-center text-gray-500 italic h-full flex items-center justify-center">
+  <p>Select an issue to view its details or no issue loaded.</p>
+</div>

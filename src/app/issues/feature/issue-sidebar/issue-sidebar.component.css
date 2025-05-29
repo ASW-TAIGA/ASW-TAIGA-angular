@@ -1,0 +1,8 @@
+/* src/app/issues/feature/issues/issue-sidebar.component.css */
+@import "https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap";
+
+:host {
+  font-family: 'Inter', sans-serif;
+  display: block;
+  height: 100%; /* Asegura que el host del componente tome la altura completa de su padre (sidebar-wrapper) */
+}
