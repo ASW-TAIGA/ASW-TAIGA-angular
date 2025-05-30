@@ -1,0 +1,7 @@
+/* Add specific styles if needed */
+.prose img { /* Basic styling for images in description if using markdown conversion */
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
+  }
+  

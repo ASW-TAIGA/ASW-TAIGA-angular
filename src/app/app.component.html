@@ -1,1 +1,17 @@
-<router-outlet></router-outlet>
+<!-- 
+  If not authenticated, router-outlet will display the /users (UserSelectComponent) 
+  which has its own full-page layout.
+  If authenticated, show the main app layout with sidebar.
+-->
+@if (isAuthenticated()) {
+  <div class="flex min-h-screen">
+    <app-sidebar></app-sidebar>
+    <main class="flex-1 p-6 bg-slate-100 overflow-y-auto">
+      <router-outlet></router-outlet>
+    </main>
+  </div>
+} @else {
+  <!-- When not authenticated, AuthGuard redirects to /users, 
+       UserSelectComponent takes over the full screen -->
+  <router-outlet></router-outlet>
+}

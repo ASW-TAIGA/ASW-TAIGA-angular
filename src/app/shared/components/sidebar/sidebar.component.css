@@ -1,0 +1,7 @@
+/* Add any specific styles for the sidebar here if Tailwind isn't enough */
+/* For example, ensuring the sidebar takes full height if flex layout issues arise */
+:host {
+    display: block;
+    min-height: 100vh; /* Or ensure parent flex container handles height */
+  }
+  
