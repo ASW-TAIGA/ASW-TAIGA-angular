@@ -1,4 +1,3 @@
-// src/app/issues/feature/issues-list/issues-list.component.ts
 import { Component, OnInit, inject, HostListener, ElementRef } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { Router } from '@angular/router';
@@ -11,9 +10,8 @@ import {
   IssueOptions,
   IssueUpdatePayload,
   NewIssueFormData
-} from '../../data-access/issue.service'; // Asegúrate que todas estas se exportan desde el servicio
+} from '../../data-access/issue.service';
 import { IssueFormComponent } from '../issue-form/issue-form.component';
-// IssueComponent ya no se importa aquí si la navegación por rutas lo maneja
 
 type SortableColumnKey = 'issue_type' | 'severity' | 'priority' | 'status';
 
@@ -32,58 +30,63 @@ export class IssuesListComponent implements OnInit {
   issues: Issue[] = [];
   isLoading: boolean = true;
 
-  // selectedIssue y los inputs para IssueComponent ya no son necesarios aquí
-  // si IssueComponent se maneja completamente por rutas y carga sus propios datos.
-  // selectedIssue: Issue | null = null;
-  // allIssueIdsForNavigation: (string | number)[] = []; // Se gestiona en IssueComponent
-
-  // Propiedades para el ordenamiento
   currentSortColumn: SortableColumnKey | null = null;
   sortDirection: 'asc' | 'desc' = 'asc';
 
-  // Para el formulario de Nuevo Issue
   showNewIssueForm: boolean = false;
   issueOptionsForForm: IssueOptions | null = null;
-  currentUserForForm: UserLite | null = null;
-  allProjectUsersForForm: UserLite[] = [];
+  currentUser: UserLite | null = null;
+  allProjectUsers: UserLite[] = [];
 
-  // Para el dropdown de asignados en la lista
   activeAssigneeDropdownForIssueId: number | string | null = null;
 
   constructor() {}
 
   ngOnInit(): void {
-    this.loadIssues();
-    this.loadDataForFormsAndContext();
+    this.loadInitialData();
   }
 
-  loadIssues(): void {
+  loadInitialData(): void {
     this.isLoading = true;
-    this.issueService.getIssues().pipe(
-      tap(issues => console.log('IssuesListComponent: Issues loaded for list', issues.length)),
+
+    forkJoin({
+      issues: this.issueService.getIssues(),
+      currentUser: this.issueService.getCurrentUser(),
+      projectUsers: this.issueService.getProjectUsers(),
+      issueOptions: this.issueService.getIssueOptions()
+    }).pipe(
+      tap(data => console.log('IssuesListComponent: Initial data fetched from service', data)),
       catchError(error => {
-        console.error('IssuesListComponent: Error loading issues', error);
+        console.error('IssuesListComponent: Error loading initial data', error);
         this.isLoading = false;
-        return of([]);
+        // Aquí podrías inicializar con arrays/objetos vacíos para evitar errores en la plantilla
+        this.issues = [];
+        this.currentUser = null;
+        this.allProjectUsers = [];
+        this.issueOptionsForForm = null;
+        // Mostrar un mensaje de error en la UI sería ideal aquí
+        alert('Failed to load initial data. Please check connectivity or API status.');
+        return of(null); // Devuelve un observable que completa para que la cadena no se rompa
       })
-    ).subscribe(issues => {
-      this.issues = issues;
-      if (this.currentSortColumn) {
-        this.applyCurrentSort();
+    ).subscribe(data => {
+      if (data) {
+        this.issues = data.issues;
+        this.currentUser = data.currentUser;
+        this.allProjectUsers = data.projectUsers;
+        this.issueOptionsForForm = data.issueOptions;
+
+        if (this.currentSortColumn) {
+          this.applyCurrentSort();
+        }
       }
       this.isLoading = false;
+      console.log('IssuesListComponent: Initial data loading complete.');
     });
-  }
-
-  loadDataForFormsAndContext(): void {
-    this.issueService.getIssueOptions().subscribe(options => this.issueOptionsForForm = options);
-    this.issueService.getCurrentUser().subscribe(user => this.currentUserForForm = user);
-    this.issueService.getProjectUsers().subscribe(users => this.allProjectUsersForForm = users);
   }
 
   selectIssueAndNavigate(issue: Issue): void {
     console.log('IssuesListComponent: Navigating to issue ID:', issue.id);
-    this.router.navigate(['/issues', issue.id]); // Navega a la ruta de detalle
+    this.router.navigate(['/issues', issue.id]);
   }
 
   toggleNewIssueForm(): void {
@@ -92,12 +95,12 @@ export class IssuesListComponent implements OnInit {
 
   handleIssueCreated(eventPayload: { issueData: NewIssueFormData, files: File[] }): void {
     console.log('IssuesListComponent: handleIssueCreated, data from form:', eventPayload.issueData);
-    if (!this.currentUserForForm) {
+    if (!this.currentUser) {
       alert("Error: Current user not available for creating issue.");
       return;
     }
 
-    this.issueService.createIssue(eventPayload.issueData, this.currentUserForForm).subscribe({
+    this.issueService.createIssue(eventPayload.issueData, this.currentUser).subscribe({
       next: (createdIssue) => {
         console.log('IssuesListComponent: Issue created successfully by service:', createdIssue);
         this.issues = [createdIssue, ...this.issues];

@@ -1,20 +1,10 @@
 import { Component, OnInit, Input, Output, EventEmitter, ViewChild, ElementRef, inject, HostListener } from '@angular/core'; // AÑADIDO HostListener
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { IssueService, UserLite, StatusDetail, IssueTypeDetail, SeverityDetail, PriorityDetail, IssueOptions } from '../../data-access/issue.service'; // Asegúrate que la ruta es correcta
+import { IssueService, UserLite, StatusDetail, IssueTypeDetail, SeverityDetail, PriorityDetail, IssueOptions, NewIssueFormData } from '../../data-access/issue.service'; // Asegúrate que la ruta es correcta
 
 // Interfaz para los datos del formulario del nuevo issue
 // Si esta interfaz se usa en varios sitios, considera moverla a un archivo de tipos o al servicio y exportarla.
-export interface NewIssueFormData { // Exportada si la usas también en IssuesListComponent
-  title: string;
-  description: string;
-  status_id: number | null;
-  assignee_id: number | null;
-  type_id: number | null;
-  severity_id: number | null;
-  priority_id: number | null;
-  deadline?: string | null;
-}
 
 @Component({
   selector: 'app-issue-form',
@@ -40,10 +30,11 @@ export class IssueFormComponent implements OnInit {
     description: '',
     status_id: null,
     assignee_id: null,
-    type_id: null,
+    issue_type_id: null, // Usar issue_type_id
     severity_id: null,
     priority_id: null,
-    deadline: null // Inicializar deadline
+    deadline: null,
+    watcher_ids: [] // Inicializar watcher_ids
   };
 
   // Para la subida de adjuntos
@@ -59,8 +50,8 @@ export class IssueFormComponent implements OnInit {
     if (this.statusOptions.length > 0) {
       this.newIssue.status_id = this.statusOptions[0].id;
     }
-    if (this.typeOptions.length > 0) {
-      this.newIssue.type_id = this.typeOptions[0].id;
+    if (this.typeOptions.length > 0 && !this.newIssue.issue_type_id) { // Nuevo
+      this.newIssue.issue_type_id = this.typeOptions[0].id;
     }
     if (this.severityOptions.length > 0) {
       this.newIssue.severity_id = this.severityOptions[0].id;
@@ -68,6 +59,7 @@ export class IssueFormComponent implements OnInit {
     if (this.priorityOptions.length > 0) {
       this.newIssue.priority_id = this.priorityOptions[0].id;
     }
+
     // Opcional: Pre-asignar al currentUser
     // if (this.currentUser) {
     //   this.newIssue.assignee_id = this.currentUser.id;
@@ -77,7 +69,7 @@ export class IssueFormComponent implements OnInit {
   onSubmit(): void {
     if (!this.newIssue.title.trim() ||
       !this.newIssue.status_id ||
-      !this.newIssue.type_id ||
+      !this.newIssue.issue_type_id || // Usar issue_type_id
       !this.newIssue.priority_id ||
       !this.newIssue.severity_id) {
       alert('Please fill in all required fields (Subject, Status, Type, Severity, Priority).');
@@ -93,7 +85,7 @@ export class IssueFormComponent implements OnInit {
   resetForm(): void { // Método para resetear el formulario si se necesita
     this.newIssue = {
       title: '', description: '', status_id: null, assignee_id: null,
-      type_id: null, severity_id: null, priority_id: null, deadline: null
+      issue_type_id: null, severity_id: null, priority_id: null, deadline: null
     };
     this.selectedFiles = [];
     this.showDeadlinePickerInForm = false;
