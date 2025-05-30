@@ -1,0 +1,19 @@
+/* Styles for the active and inactive tabs */
+.tab-button {
+    @apply px-4 py-2 font-medium text-sm rounded-md transition-colors duration-150 ease-in-out;
+  }
+  
+  .tab-button-active {
+    @apply bg-slate-700 text-white;
+  }
+  
+  .tab-button-inactive {
+    @apply text-slate-600 hover:bg-slate-200 hover:text-slate-800;
+  }
+  
+  /* Ensure the main content area allows for scrolling if content overflows */
+  .main-content-area {
+    @apply p-6 bg-white rounded-lg shadow;
+    /* min-height can be adjusted based on your layout needs */
+  }
+  
