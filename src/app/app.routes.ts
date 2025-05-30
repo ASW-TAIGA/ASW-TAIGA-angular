@@ -1,4 +1,8 @@
+// src/app/app.routes.ts
 import { Routes } from '@angular/router';
+import { IssuesListComponent } from './issues/feature/issues-list/issues-list.component'; // Ajusta la ruta si es necesario
+import { IssueComponent } from './issues/feature/issue/issue.component'; 
+
 import { authGuard } from './accounts/guards/auth.guard'; // Import the guard
 
 export const routes: Routes = [
