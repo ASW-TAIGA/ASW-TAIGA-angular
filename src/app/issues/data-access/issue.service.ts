@@ -1,8 +1,8 @@
 // src/app/issues/data-access/issue.service.ts
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Observable, of, throwError, timer } from 'rxjs';
-import { map, tap, delay } from 'rxjs/operators';
+import { Observable, throwError, forkJoin, of } from 'rxjs'; // Asegúrate de importar forkJoin y of
+import { catchError, map, tap } from 'rxjs/operators';
 
 // --- INTERFACES (sin cambios) ---
 export interface UserLite { id: number; username: string; first_name: string; last_name: string; avatar_url: string; }
@@ -15,168 +15,178 @@ export interface AttachmentDetail { id: number; issue: number; file: string; fil
 export interface Issue { id: number; title: string; description: string; status: StatusDetail; issue_type: IssueTypeDetail; severity: SeverityDetail; priority: PriorityDetail; creator: UserLite; assignee: UserLite | null; created_at: string; updated_at: string; deadline: string | null; watchers: UserLite[]; comments: CommentDetail[]; attachments: AttachmentDetail[]; }
 export interface IssueOptions { statusOptions: StatusDetail[]; typeOptions: IssueTypeDetail[]; severityOptions: SeverityDetail[]; priorityOptions: PriorityDetail[]; }
 export interface IssueUpdatePayload { title?: string; description?: string; status_id?: number; issue_type_id?: number; severity_id?: number; priority_id?: number; assignee_id?: number | null; deadline?: string | null; watchers_to_add?: number[]; watchers_to_remove?: number[]; }
-
-const MOCK_DELAY = 300;
-const mockUser1: UserLite = { id: 1, username: 'currentuser', first_name: 'Ana', last_name: 'Pérez', avatar_url: 'https://www.gravatar.com/avatar/ana?d=mp' };
-const mockUser2: UserLite = { id: 2, username: 'anotheruser', first_name: 'Luis', last_name: 'Gómez', avatar_url: 'https://www.gravatar.com/avatar/luis?d=mp' };
-const mockUser3: UserLite = { id: 3, username: 'teammate', first_name: 'Sara', last_name: 'Connor', avatar_url: '' };
-const mockStatusOpen: StatusDetail = { id: 2, name: 'Open', color: 'bg-blue-500', order: 2, slug: 'open', is_closed: false };
-const mockStatusInProgress: StatusDetail = { id: 3, name: 'In Progress', color: 'bg-yellow-500', order: 3, slug: 'in-progress', is_closed: false };
-const mockTypeBug: IssueTypeDetail = { id: 1, name: 'Bug', color: 'bg-red-500', order: 1 };
-const mockSeverityNormal: SeverityDetail = { id: 2, name: 'Normal', color: 'bg-blue-400', order: 2 };
-const mockPriorityNormal: PriorityDetail = { id: 2, name: 'Normal', color: 'bg-yellow-400', order: 2 };
-const mockProjectUsers: UserLite[] = [mockUser1, mockUser2, mockUser3];
-
-let mockIssuesDb: Issue[] = [
-  { id: 123, title: 'Issue de prueba 123: Arreglar el login', description: 'La descripción inicial del issue 123 sobre el login. Necesita más detalles.', status: mockStatusOpen, issue_type: mockTypeBug, severity: mockSeverityNormal, priority: mockPriorityNormal, creator: mockUser1, assignee: mockUser2, created_at: new Date(Date.now() - 86400000 * 2).toISOString(), updated_at: new Date(Date.now() - 86400000).toISOString(), deadline: null, watchers: [mockUser1, mockUser3], comments: [ {id: 1, author: mockUser2, text: "Estoy en ello.", created_at: new Date(Date.now() - 3600000 * 5).toISOString(), updated_at: new Date(Date.now() - 3600000 * 5).toISOString()}, {id: 2, author: mockUser1, text: "¡Genial, gracias!", created_at: new Date(Date.now() - 3600000 * 4).toISOString(), updated_at: new Date(Date.now() - 3600000 * 4).toISOString()} ], attachments: [] },
-  { id: 456, title: 'Issue de prueba 456: Implementar nueva característica', description: 'Descripción para la nueva característica X.', status: mockStatusInProgress, issue_type: { id: 2, name: 'Feature', color: 'bg-blue-500', order: 2 }, severity: { id: 1, name: 'Low', color: 'bg-green-400', order: 1 }, priority: { id: 1, name: 'Low', color: 'bg-green-300', order: 1 }, creator: mockUser2, assignee: null, created_at: new Date(Date.now() - 86400000 * 3).toISOString(), updated_at: new Date().toISOString(), deadline: new Date(Date.now() + 86400000 * 7).toISOString(), watchers: [mockUser2], comments: [], attachments: [] }
-];
+export interface NewIssueFormData {
+  title: string;
+  description: string;
+  status_id: number | null;
+  issue_type_id: number | null; // CAMBIADO de type_id
+  severity_id: number | null;
+  priority_id: number | null;
+  assignee_id: number | null;
+  deadline?: string | null;
+  watcher_ids?: number[]; // AÑADIDO: para los watchers
+}
 
 @Injectable({
   providedIn: 'root'
 })
 export class IssueService {
-  private apiUrl = '/api/issues';
-  private projectApiUrl = '/api';
+  // URL base para los issues (sin la barra final aquí)
+  private issuesApiBaseUrl = 'https://asw-taiga-1.onrender.com/api/v1/issues';
+
+  // URL base para settings (si es diferente y se usa en getIssueOptions)
+  private settingsApiBaseUrl = 'https://asw-taiga-1.onrender.com/api/v1/settings';
+
+  // URL base general (si es diferente para usuarios, etc.)
+  private generalApiBaseUrl = 'https://asw-taiga-1.onrender.com/api/v1';
 
   constructor(private http: HttpClient) { }
 
-  // Helper para obtener las opciones mockeadas consistentemente
-  private getMockedIssueOptions(): IssueOptions {
-    return {
-      statusOptions: [ { id: 1, name: 'New', color: 'bg-gray-400', order: 1, slug: 'new', is_closed: false }, mockStatusOpen, mockStatusInProgress, { id: 4, name: 'Resolved', color: 'bg-green-500', order: 4, slug: 'resolved', is_closed: true }, { id: 5, name: 'Closed', color: 'bg-purple-500', order: 5, slug: 'closed', is_closed: true } ],
-      typeOptions: [ mockTypeBug, { id: 2, name: 'Feature', color: 'bg-blue-500', order: 2 }, { id: 3, name: 'Task', color: 'bg-teal-500', order: 3 } ],
-      severityOptions: [ { id: 1, name: 'Low', color: 'bg-green-400', order: 1 }, mockSeverityNormal, { id: 3, name: 'High', color: 'bg-orange-500', order: 3 }, { id: 4, name: 'Critical', color: 'bg-red-700', order: 4 } ],
-      priorityOptions: [ { id: 1, name: 'Low', color: 'bg-green-300', order: 1 }, mockPriorityNormal, { id: 3, name: 'High', color: 'bg-orange-400', order: 3 }, { id: 4, name: 'Urgent', color: 'bg-red-600', order: 4 } ]
-    };
+  getIssues(): Observable<Issue[]> {
+    console.log('IssueService: Fetching all issues from API:', `${this.issuesApiBaseUrl}/`);
+    // Añadimos la barra si el endpoint de lista la requiere
+    return this.http.get<Issue[]>(`${this.issuesApiBaseUrl}/`).pipe(
+      tap(issues => console.log(`IssueService: Fetched ${issues.length} issues via API`)),
+      catchError(this.handleError)
+    );
   }
 
   getIssueOptions(): Observable<IssueOptions> {
-    console.log('IssueService: Fetching issue options (MOCK)');
-    const options = this.getMockedIssueOptions();
-    return of(options).pipe(delay(MOCK_DELAY));
+    console.log('IssueService: Fetching issue options from API using forkJoin');
+    return forkJoin({
+      priorityOptions: this.http.get<PriorityDetail[]>(`${this.settingsApiBaseUrl}/priorities/`),
+      severityOptions: this.http.get<SeverityDetail[]>(`${this.settingsApiBaseUrl}/severities/`),
+      statusOptions:   this.http.get<StatusDetail[]>(`${this.settingsApiBaseUrl}/statuses/`),
+      typeOptions:     this.http.get<IssueTypeDetail[]>(`${this.settingsApiBaseUrl}/types/`)
+    }).pipe(
+      map(results => {
+        console.log('IssueService: Combined issue options from API:', results);
+        return results as IssueOptions;
+      }),
+      catchError(this.handleError)
+    );
   }
 
+  // --- MÉTODO getIssue ACTUALIZADO ---
   getIssue(issueId: string | number): Observable<Issue> {
-    console.log(`IssueService: Fetching issue ${issueId} (MOCK)`);
-    const numericId = Number(issueId);
-    const foundIssue = mockIssuesDb.find(issue => issue.id === numericId);
-    if (foundIssue) {
-      return of({...foundIssue}).pipe(delay(MOCK_DELAY));
-    }
-    return throwError(() => new Error(`Mock Issue with ID ${issueId} not found`)).pipe(delay(MOCK_DELAY));
+    const url = `${this.issuesApiBaseUrl}/${issueId}/`; // Añadida la barra inclinada al final
+    console.log(`IssueService: Fetching issue ${issueId} from API: ${url}`);
+    return this.http.get<Issue>(url).pipe(
+      tap(issue => console.log(`IssueService: Fetched issue ${issueId} via API`, issue)),
+      catchError(this.handleError)
+    );
   }
 
-  // Sobrecargas para findOptionById_typed
-  private findOptionById_typed(id: number, optionType: 'statusOptions'): StatusDetail | undefined;
-  private findOptionById_typed(id: number, optionType: 'typeOptions'): IssueTypeDetail | undefined;
-  private findOptionById_typed(id: number, optionType: 'severityOptions'): SeverityDetail | undefined;
-  private findOptionById_typed(id: number, optionType: 'priorityOptions'): PriorityDetail | undefined;
-  // Implementación
-  private findOptionById_typed(
-    id: number,
-    optionType: keyof IssueOptions
-  ): StatusDetail | IssueTypeDetail | SeverityDetail | PriorityDetail | undefined {
-    const options = this.getMockedIssueOptions();
-    switch (optionType) {
-      case 'statusOptions':
-        return options.statusOptions.find(opt => opt.id === id);
-      case 'typeOptions':
-        return options.typeOptions.find(opt => opt.id === id);
-      case 'severityOptions':
-        return options.severityOptions.find(opt => opt.id === id);
-      case 'priorityOptions':
-        return options.priorityOptions.find(opt => opt.id === id);
-      default:
-        return undefined;
+  createIssue(issueData: NewIssueFormData, creator: UserLite): Observable<Issue> {
+    console.log('IssueService: Creating new issue via API with data:', issueData);
+
+    // Preparamos el payload según lo que espera la API.
+    // La API espera IDs numéricos para status, type, severity, priority.
+    // NewIssueFormData ya los tiene como number | null.
+    // La API espera assignee_id como number (el ejemplo usa 0, que podría ser un ID válido o un placeholder para "no asignado").
+    // Si tu API trata `null` para assignee_id como "no asignado", está bien. Si espera que el campo se omita,
+    // necesitarías construir el payload condicionalmente.
+    // El ejemplo de API no incluye creator_id en el payload, asumiendo que el backend lo infiere.
+
+    const payloadToSend: any = {
+      title: issueData.title,
+      description: issueData.description || "", // Asegurar que no sea null
+      status_id: issueData.status_id,
+      issue_type_id: issueData.issue_type_id,
+      severity_id: issueData.severity_id,
+      priority_id: issueData.priority_id,
+      assignee_id: issueData.assignee_id, // Si null es aceptado por el backend para "no asignado"
+      deadline: issueData.deadline || null, // Enviar null si no hay fecha
+      watcher_ids: issueData.watcher_ids && issueData.watcher_ids.length > 0 ? issueData.watcher_ids : [] // Enviar array vacío si no hay watchers
+    };
+
+    // Limpiar propiedades nulas si el backend no las quiere (excepto deadline y assignee_id que podrían ser null explícitamente)
+    // Por ejemplo, si status_id es obligatorio y no puede ser null:
+    if (payloadToSend.status_id === null) {
+      // Manejar error o no enviar, dependiendo de los requisitos de tu API.
+      // Por ahora, lo dejamos tal cual asumiendo que el form lo valida.
+      console.warn("status_id is null, backend might require it.");
     }
+    // Similar para type, severity, priority.
+
+    // Si assignee_id: 0 significa "no asignado" y tu API no acepta null:
+    // if (payloadToSend.assignee_id === null) {
+    //   payloadToSend.assignee_id = 0; // O elimina la propiedad si es el caso
+    // }
+
+
+    console.log('IssueService: Payload for POST request:', payloadToSend);
+    return this.http.post<Issue>(`${this.issuesApiBaseUrl}/`, payloadToSend).pipe(
+      tap(createdIssue => console.log('IssueService: Issue created successfully via API. Response:', createdIssue)),
+      catchError(this.handleError)
+    );
   }
 
   updateIssue(issueId: string | number, payload: IssueUpdatePayload): Observable<Issue> {
-    console.log(`IssueService: MOCK - Updating issue ${issueId} with payload`, payload);
-    const numericId = Number(issueId);
-    const issueIndex = mockIssuesDb.findIndex(issue => issue.id === numericId);
+    const url = `${this.issuesApiBaseUrl}/${issueId}/`; // Consistencia con la barra final si el backend la espera
+    console.log(`IssueService: Updating issue ${issueId} with payload to API: ${url}`, payload);
+    return this.http.patch<Issue>(url, payload).pipe(
+      tap(updatedIssue => console.log('IssueService: Issue updated successfully via API', updatedIssue)),
+      catchError(this.handleError)
+    );
+  }
 
-    if (issueIndex > -1) {
-      const originalIssue = mockIssuesDb[issueIndex];
-      const updatedIssue: Issue = {
-        ...originalIssue,
-        ...(payload.title !== undefined && { title: payload.title }),
-        ...(payload.description !== undefined && { description: payload.description }),
-        ...(payload.deadline !== undefined && { deadline: payload.deadline }),
-        updated_at: new Date().toISOString(),
-      };
+  addAttachment(issueId: number, file: File): Observable<AttachmentDetail> {
+    console.log(`IssueService: Adding attachment "${file.name}" for issue ID ${issueId} via API`);
+    const formData = new FormData();
+    formData.append('file', file, file.name);
+    // El endpoint para adjuntos podría ser /api/v1/issues/{issueId}/attachments/
+    return this.http.post<AttachmentDetail>(`${this.issuesApiBaseUrl}/${issueId}/attachments/`, formData).pipe(
+      tap(attachment => console.log('IssueService: Attachment added via API', attachment)),
+      catchError(this.handleError)
+    );
+  }
 
-      if (payload.status_id !== undefined) {
-        const newStatus = this.findOptionById_typed(payload.status_id, 'statusOptions');
-        if (newStatus) updatedIssue.status = newStatus; // Esto ahora debería funcionar sin error de tipo
-      }
-      if (payload.issue_type_id !== undefined) {
-        const newType = this.findOptionById_typed(payload.issue_type_id, 'typeOptions');
-        if (newType) updatedIssue.issue_type = newType;
-      }
-      if (payload.severity_id !== undefined) {
-        const newSeverity = this.findOptionById_typed(payload.severity_id, 'severityOptions');
-        if (newSeverity) updatedIssue.severity = newSeverity;
-      }
-      if (payload.priority_id !== undefined) {
-        const newPriority = this.findOptionById_typed(payload.priority_id, 'priorityOptions');
-        if (newPriority) updatedIssue.priority = newPriority;
-      }
-      if (payload.assignee_id !== undefined) {
-        updatedIssue.assignee = payload.assignee_id ? mockProjectUsers.find(u => u.id === payload.assignee_id) || null : null;
-      }
-      if (payload.watchers_to_add) {
-        payload.watchers_to_add.forEach(userId => {
-          const userToAdd = mockProjectUsers.find(u => u.id === userId);
-          if (userToAdd && !updatedIssue.watchers.some(w => w.id === userId)) {
-            updatedIssue.watchers = [...updatedIssue.watchers, userToAdd];
-          }
-        });
-      }
-      if (payload.watchers_to_remove) {
-        payload.watchers_to_remove.forEach(userId => {
-          updatedIssue.watchers = updatedIssue.watchers.filter(w => w.id !== userId);
-        });
-      }
-
-      mockIssuesDb[issueIndex] = updatedIssue;
-      console.log('IssueService: MOCK - Returning updated issue:', {...updatedIssue});
-      return of({...updatedIssue}).pipe(delay(MOCK_DELAY));
-    }
-    return throwError(() => new Error(`Mock Issue ${issueId} not found for update`)).pipe(delay(MOCK_DELAY));
+  deleteAttachment(issueId: number, attachmentId: number): Observable<void> {
+    console.log(`IssueService: Deleting attachment ID ${attachmentId} from issue ID ${issueId} via API`);
+    return this.http.delete<void>(`${this.issuesApiBaseUrl}/${issueId}/attachments/${attachmentId}/`).pipe(
+      tap(() => console.log(`IssueService: Attachment ${attachmentId} deleted via API`)),
+      catchError(this.handleError)
+    );
   }
 
   getProjectUsers(): Observable<UserLite[]> {
-    console.log('IssueService: Fetching project users (MOCK)');
-    return of([...mockProjectUsers]).pipe(delay(MOCK_DELAY));
+    console.log('IssueService: Fetching project users from API');
+    return this.http.get<UserLite[]>(`${this.generalApiBaseUrl}/users/`).pipe(
+      tap(users => console.log('IssueService: Fetched project users via API', users)),
+      catchError(this.handleError)
+    );
   }
 
   getCurrentUser(): Observable<UserLite> {
-    console.log('IssueService: Fetching current user (MOCK)');
-    return of({...mockUser1}).pipe(delay(MOCK_DELAY));
+    console.log('IssueService: Fetching current user from API');
+    return this.http.get<UserLite>(`${this.generalApiBaseUrl}/me/`).pipe(
+      tap(user => console.log('IssueService: Fetched current user via API', user)),
+      catchError(this.handleError)
+    );
   }
 
   deleteIssue(issueId: string | number): Observable<void> {
-    console.log(`IssueService: Deleting issue ${issueId} (MOCK)`);
-    const numericId = Number(issueId);
-    const issueIndex = mockIssuesDb.findIndex(issue => issue.id === numericId);
-    if (issueIndex > -1) {
-      mockIssuesDb.splice(issueIndex, 1);
-      console.log(`Mock: Issue ${numericId} deleted successfully.`);
-      return of(undefined).pipe(delay(MOCK_DELAY));
-    }
-    return throwError(() => new Error(`Mock Issue ${numericId} not found for deletion`)).pipe(delay(MOCK_DELAY));
+    console.log(`IssueService: Deleting issue ${issueId} via API`);
+    return this.http.delete<void>(`${this.issuesApiBaseUrl}/${issueId}/`).pipe(
+      tap(() => console.log(`IssueService: Issue ${issueId} deleted successfully via API`)),
+      catchError(this.handleError)
+    );
   }
 
   private handleError(error: HttpErrorResponse): Observable<never> {
-    let errorMessage = 'An unknown error occurred (this should not happen with full mocks)!';
+    let errorMessage = 'An unknown error occurred!';
     if (error.error instanceof ErrorEvent) {
       errorMessage = `Client-side error: ${error.error.message}`;
     } else {
-      errorMessage = `Backend error Code: ${error.status}\nMessage: ${error.message}`;
+      errorMessage = `Error Code: ${error.status}\nMessage: ${error.message || 'Server error'}`;
+      if (error.error && typeof error.error === 'object') {
+        errorMessage += `\nDetails: ${JSON.stringify(error.error)}`;
+      } else if (typeof error.error === 'string') {
+        errorMessage += `\nDetails: ${error.error}`;
+      }
     }
-    console.error('API Error (handleError called):', errorMessage, error);
-    return throwError(() => new Error('Something bad happened; please try again later. Error: ' + errorMessage ));
+    console.error('API Error in IssueService:', errorMessage, '\nFull Error:', error);
+    return throwError(() => new Error('Something bad happened with the API; please try again later. Reported: ' + errorMessage ));
   }
 }
