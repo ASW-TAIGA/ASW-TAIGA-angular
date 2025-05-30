@@ -1,3 +1,17 @@
+# Integrantes
+- Jashanpreet Singh
+- Gemma Bachs
+- Nil Beascoechea Vàzquez
+- Mohamed Balich
+
+# Links
+
+- **RENDER Backend:**
+  [Deployment en render](https://asw-taiga-1.onrender.com/accounts/login/)
+  
+- **Taiga:**
+  [Taiga-ASW](https://tree.taiga.io/project/uzux6-asw_taiga/timeline)
+
 # TaigaClone
 
 This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 19.
