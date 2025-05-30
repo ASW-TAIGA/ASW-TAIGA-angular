@@ -10,7 +10,7 @@ export class ApiService {
   private http = inject(HttpClient);
   private authService = inject(AuthService); // Inject AuthService
   
-  private API_BASE_URL = 'http://localhost:8000/api/v1'; 
+  private API_BASE_URL = 'https://asw-taiga.onrender.com/api/v1'; 
 
   // API_KEY is now derived from AuthService
   private currentApiKey = computed(() => this.authService.currentApiKey());
