@@ -1,5 +1,4 @@
-// src/app/issues/feature/issue/issue.component.ts
-import { Component, OnInit, Input, OnChanges, SimpleChanges, Output, EventEmitter, inject, OnDestroy } from '@angular/core';
+import { Component, OnInit, Input, OnChanges, SimpleChanges, Output, EventEmitter, inject, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { IssueSidebarComponent } from '../issue-sidebar/issue-sidebar.component';
 import { IssueDetailComponent } from '../issue-detail/issue-detail.component';
@@ -8,130 +7,93 @@ import {
   Issue,
   IssueOptions,
   IssueUpdatePayload,
-  UserLite
+  UserLite,
+  AttachmentDetail // Added
 } from '../../data-access/issue.service';
-import { Observable, BehaviorSubject, of, Subscription } from 'rxjs';
-import { tap } from 'rxjs/operators';
-// Eliminar la importación de IssuesListComponent si no se usa en la plantilla de este componente
-// import { IssuesListComponent } from '../issues-list/issues-list.component';
+import { Observable, BehaviorSubject, of, Subscription, forkJoin } from 'rxjs';
+import { tap, catchError, finalize } from 'rxjs/operators';
+import { ToastrService } from 'ngx-toastr';
 
 @Component({
-  selector: 'app-issues',
+  selector: 'app-issues', // Changed selector from 'app-issues' to 'app-issue-view' or similar if this is a view component
   standalone: true,
   imports: [
     CommonModule,
     IssueSidebarComponent,
     IssueDetailComponent
-    // IssuesListComponent, // Eliminar de aquí también
   ],
   templateUrl: './issue.component.html',
-  styleUrl: './issue.component.css'
+  styleUrls: ['./issue.component.css'], // Ensure this file exists or remove if not needed
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class IssueComponent implements OnInit, OnChanges, OnDestroy {
-  @Input() issueToShow: Issue | null = null;
-  @Input() allIssueIds: (number | string)[] = [];
+  @Input() issueToShow: Issue | null = null; // This will be the primary way to set the issue
+  @Input() allIssueIds: (number | string)[] = []; // For prev/next navigation
   @Input() currentUserInput: UserLite | null = null;
   @Input() allProjectUsersInput: UserLite[] = [];
+  @Input() issueOptionsInput: IssueOptions | null = null; // Pass options directly
 
+  // Output to notify parent about navigation or if issue needs refresh from list
   @Output() changeIssueRequest = new EventEmitter<string | number>();
+  @Output() issueDeletedInDetail = new EventEmitter<number>();
+
 
   private issueService = inject(IssueService);
+  private cdr = inject(ChangeDetectorRef);
+  private toastr = inject(ToastrService);
 
   private _currentIssueSubject = new BehaviorSubject<Issue | null>(null);
   currentIssue$: Observable<Issue | null> = this._currentIssueSubject.asObservable();
 
-  issueOptions$: Observable<IssueOptions | null> = of(null);
-  // Las siguientes propiedades ya no son necesarias como Observables cargados aquí:
-  // currentUser$: Observable<UserLite | null> = of(null);
-  // allProjectUsers$: Observable<UserLite[]> = of([]);
+  // issueOptions$: Observable<IssueOptions | null> = of(null); // Will use @Input() issueOptionsInput
 
-  issueId: string | null = '123';
-
+  // For navigation state
   canGoPrevious: boolean = false;
   canGoNext: boolean = false;
   private previousIssueId: string | number | null = null;
   private nextIssueId: string | number | null = null;
-  private currentIssueSubscription: Subscription | undefined;
 
-  constructor() {
-    console.log('IssueComponent: Constructor - initial issueToShow:', this.issueToShow, 'initial issueId:', this.issueId);
-  }
+  private subscriptions = new Subscription();
+
+  isLoadingIssue: boolean = false;
+
+  constructor() {}
 
   ngOnInit(): void {
-    console.log('IssueComponent: ngOnInit START - issueToShow:', this.issueToShow, 'INTERNAL issueId:', this.issueId, 'ALL ISSUE IDs:', this.allIssueIds);
-    this.setupCurrentIssueStream();
+    this.subscriptions.add(
+      this.currentIssue$.subscribe(currentIssue => {
+        this.updateNavigationState(currentIssue);
+        this.cdr.markForCheck();
+      })
+    );
 
     if (this.issueToShow) {
       this._currentIssueSubject.next(this.issueToShow);
-      if (this.issueToShow.id !== undefined) this.issueId = String(this.issueToShow.id);
-      console.log('IssueComponent: ngOnInit - Using issueToShow from @Input:', this.issueToShow);
-    } else if (this.issueId && this.allIssueIds.map(String).includes(String(this.issueId))) {
-      console.log(`IssueComponent: ngOnInit - No issueToShow from @Input, attempting to load default issueId: ${this.issueId}`);
-      this.loadIssueById(this.issueId);
-    } else if (this.allIssueIds.length > 0) {
-      console.log(`IssueComponent: ngOnInit - No issueToShow or invalid issueId, loading first from allIssueIds: ${this.allIssueIds[0]}`);
-      this.loadIssueById(String(this.allIssueIds[0]));
-    } else {
-      console.log('IssueComponent: ngOnInit - No issueToShow from @Input and no default issueId/allIssueIds. CurrentIssue will be null.');
-      this._currentIssueSubject.next(null);
     }
-
-    this.loadDropdownOptions();
-    // loadUserContext() ya no es necesario, los datos vienen por input
-    console.log('IssueComponent: ngOnInit END');
+    // No automatic loading by ID on init; parent should provide issueToShow
   }
 
   ngOnChanges(changes: SimpleChanges): void {
-    console.log('IssueComponent: ngOnChanges - triggered. Changes:', changes);
     if (changes['issueToShow']) {
       const newIssue = changes['issueToShow'].currentValue as Issue | null;
-      console.log('IssueComponent: ngOnChanges - issueToShow changed to:', newIssue);
       this._currentIssueSubject.next(newIssue);
-      if (newIssue && newIssue.id !== undefined) {
-        this.issueId = String(newIssue.id);
-      } else {
-        this.issueId = null;
-        if ((!this.allIssueIds || this.allIssueIds.length === 0) && !this._currentIssueSubject.getValue()) {
-          const defaultFallbackId = '123';
-          console.log(`IssueComponent: ngOnChanges - issueToShow is null, allIssueIds empty, attempting to load fallback ID: ${defaultFallbackId}`);
-          this.loadIssueById(defaultFallbackId);
-        }
-      }
+      // updateNavigationState is called by the subscription to currentIssue$
     }
     if (changes['allIssueIds']) {
-      console.log('IssueComponent: ngOnChanges - allIssueIds changed:', this.allIssueIds);
-      if (!this.issueToShow && this.allIssueIds && this.allIssueIds.length > 0 && !this._currentIssueSubject.getValue()) {
-        console.log('IssueComponent: ngOnChanges - allIssueIds updated, loading first issue from new list.');
-        this.loadIssueById(String(this.allIssueIds[0]));
-      } else {
-        this.updateNavigationState(this._currentIssueSubject.getValue());
-      }
+      this.updateNavigationState(this._currentIssueSubject.getValue());
     }
-    if (changes['currentUserInput']) {
-      console.log('IssueComponent: ngOnChanges - currentUserInput updated:', this.currentUserInput);
-    }
-    if (changes['allProjectUsersInput']) {
-      console.log('IssueComponent: ngOnChanges - allProjectUsersInput updated, count:', this.allProjectUsersInput?.length);
-    }
-  }
-
-  private setupCurrentIssueStream(): void {
-    if (this.currentIssueSubscription) {
-      this.currentIssueSubscription.unsubscribe();
-    }
-    this.currentIssueSubscription = this.currentIssue$.subscribe(currentIssue => {
-      console.log('IssueComponent: currentIssue$ emitted:', currentIssue ? `ID: ${currentIssue.id}` : 'null');
-      this.updateNavigationState(currentIssue);
-    });
+    // currentUserInput and allProjectUsersInput are passed down directly
+    // issueOptionsInput is passed down directly
   }
 
   private updateNavigationState(currentIssue: Issue | null): void {
-    // ... (lógica sin cambios)
     if (currentIssue && currentIssue.id !== undefined && this.allIssueIds && this.allIssueIds.length > 0) {
       const currentIdStr = String(currentIssue.id);
-      const currentIndex = this.allIssueIds.findIndex(id => String(id) === currentIdStr);
+      const currentIndex = this.allIssueIds.map(String).indexOf(currentIdStr);
+
       this.canGoPrevious = currentIndex > 0;
       this.previousIssueId = this.canGoPrevious ? this.allIssueIds[currentIndex - 1] : null;
+
       this.canGoNext = currentIndex >= 0 && currentIndex < this.allIssueIds.length - 1;
       this.nextIssueId = this.canGoNext ? this.allIssueIds[currentIndex + 1] : null;
     } else {
@@ -140,102 +102,169 @@ export class IssueComponent implements OnInit, OnChanges, OnDestroy {
       this.previousIssueId = null;
       this.nextIssueId = null;
     }
+    this.cdr.markForCheck();
   }
 
-  loadIssueById(id: string | number): void {
-    // ... (lógica sin cambios)
-    const idStr = String(id);
-    this.issueService.getIssue(idStr).subscribe({
-      next: (issue) => {
-        this._currentIssueSubject.next(issue);
-      },
-      error: (err) => {
-        this._currentIssueSubject.next(null);
-      }
-    });
-  }
+  // Centralized issue update logic
+  handleIssuePropertyUpdate(event: { field: keyof IssueUpdatePayload | 'watchers_action', value: any, currentIssueId: number }): void {
+    this.isLoadingIssue = true;
+    this.cdr.markForCheck();
 
-  loadDropdownOptions(): void {
-    this.issueOptions$ = this.issueService.getIssueOptions().pipe(
-      tap(options => console.log('IssueComponent: Loaded issue options', options))
-    );
-  }
-
-  handleIssueUpdate(event: { field: keyof Issue, value: any, currentIssue: Issue }): void {
-    // ... (lógica sin cambios)
-    if (!event.currentIssue || !event.currentIssue.id) { return; }
-    const payload: IssueUpdatePayload = {};
-    const fieldKey = event.field as string;
-    if (fieldKey === 'status' && event.value && typeof event.value.id === 'number') {
-      payload.status_id = event.value.id;
-    } else if (fieldKey === 'issue_type' && event.value && typeof event.value.id === 'number') {
-      payload.issue_type_id = event.value.id;
-    } else if (fieldKey === 'severity' && event.value && typeof event.value.id === 'number') {
-      payload.severity_id = event.value.id;
-    } else if (fieldKey === 'priority' && event.value && typeof event.value.id === 'number') {
-      payload.priority_id = event.value.id;
-    } else if (fieldKey === 'deadline') {
-      payload.deadline = event.value as string | null;
-    } else if (fieldKey === 'title' || fieldKey === 'description') {
-      payload[fieldKey as keyof IssueUpdatePayload] = event.value;
-    } else if (fieldKey === 'assignee') {
-      payload.assignee_id = event.value ? (event.value as UserLite).id : null;
-    } else if (fieldKey === 'watchers') {
-      const watcherUpdate = event.value as { action: 'add' | 'remove', user: UserLite };
-      if (watcherUpdate.action === 'add') {
-        payload.watchers_to_add = [watcherUpdate.user.id];
-      } else if (watcherUpdate.action === 'remove') {
-        payload.watchers_to_remove = [watcherUpdate.user.id];
-      }
+    const currentIssue = this._currentIssueSubject.getValue();
+    if (!currentIssue || currentIssue.id !== event.currentIssueId) {
+        this.toastr.error("Issue context mismatch. Please refresh.", "Update Error");
+        this.isLoadingIssue = false;
+        this.cdr.markForCheck();
+        return;
     }
-    if (Object.keys(payload).length === 0) { return; }
-    this.issueService.updateIssue(event.currentIssue.id, payload).subscribe({
+
+    let payload: IssueUpdatePayload = {};
+    const fieldKey = event.field;
+
+    if (fieldKey === 'watchers_action') {
+        const watcherUpdate = event.value as { action: 'add' | 'remove', user: UserLite };
+        let currentWatcherIds = currentIssue.watchers.map(w => w.id);
+        if (watcherUpdate.action === 'add' && !currentWatcherIds.includes(watcherUpdate.user.id)) {
+            currentWatcherIds.push(watcherUpdate.user.id);
+        } else if (watcherUpdate.action === 'remove') {
+            currentWatcherIds = currentWatcherIds.filter(id => id !== watcherUpdate.user.id);
+        }
+        payload.watcher_ids = currentWatcherIds;
+    } else if (fieldKey === 'status_id' || fieldKey === 'issue_type_id' || fieldKey === 'severity_id' || fieldKey === 'priority_id' || fieldKey === 'assignee_id' || fieldKey === 'deadline' || fieldKey === 'title' || fieldKey === 'description') {
+        // Directly assign if it's a valid field of IssueUpdatePayload
+         (payload as any)[fieldKey] = event.value;
+    } else {
+        this.toastr.warning(`Update for field '${String(fieldKey)}' is not implemented directly.`, "Developer Note");
+        this.isLoadingIssue = false;
+        this.cdr.markForCheck();
+        return;
+    }
+    
+    if (Object.keys(payload).length === 0) {
+        this.isLoadingIssue = false;
+        this.cdr.markForCheck();
+        return; // No actual changes to send
+    }
+
+    this.issueService.updateIssue(event.currentIssueId, payload).pipe(
+      finalize(() => {
+        this.isLoadingIssue = false;
+        this.cdr.markForCheck();
+      })
+    ).subscribe({
       next: (updatedIssue: Issue) => {
         this._currentIssueSubject.next(updatedIssue);
+        this.toastr.success('Issue updated!', 'Success');
       },
       error: (err: any) => {
-        const currentIssueVal = this._currentIssueSubject.getValue();
-        if (currentIssueVal && currentIssueVal.id === event.currentIssue.id) {
-          this._currentIssueSubject.next(event.currentIssue);
-        }
+        this.toastr.error(`Failed to update issue: ${err.message}`, 'Error');
+        // Optionally, refetch or revert: this._currentIssueSubject.next(currentIssue);
       }
     });
   }
+  
+  // Handler for description changes from issue-detail
+  handleIssueDataChangedFromDetail(updatedIssue: Issue): void {
+    this._currentIssueSubject.next(updatedIssue); // Update the main subject
+  }
 
-  handleDeleteIssue(issueIdToDelete: number): void {
-    // ... (lógica sin cambios)
-    this.issueService.deleteIssue(issueIdToDelete).subscribe({
+  handleCommentAdded(event: { issueId: number, text: string }): void {
+    this.isLoadingIssue = true;
+    this.cdr.markForCheck();
+    this.issueService.addComment(event.issueId, event.text).pipe(
+      finalize(() => {
+        this.isLoadingIssue = false;
+        this.cdr.markForCheck();
+      })
+    ).subscribe({
+      next: (newComment) => {
+        const currentIssue = this._currentIssueSubject.getValue();
+        if (currentIssue && currentIssue.id === event.issueId) {
+          const updatedComments = [...currentIssue.comments, newComment];
+          this._currentIssueSubject.next({ ...currentIssue, comments: updatedComments });
+          this.toastr.success('Comment added!', 'Success');
+        }
+      },
+      error: (err) => this.toastr.error(`Failed to add comment: ${err.message}`, 'Error')
+    });
+  }
+
+  handleAttachmentAdded(event: { issueId: number, file: File }): void {
+    this.isLoadingIssue = true;
+    this.cdr.markForCheck();
+    this.issueService.addAttachment(event.issueId, event.file).pipe(
+      finalize(() => {
+        this.isLoadingIssue = false;
+        this.cdr.markForCheck();
+      })
+    ).subscribe({
+      next: (newAttachment) => {
+        const currentIssue = this._currentIssueSubject.getValue();
+        if (currentIssue && currentIssue.id === event.issueId) {
+          const updatedAttachments = [...currentIssue.attachments, newAttachment];
+          this._currentIssueSubject.next({ ...currentIssue, attachments: updatedAttachments });
+          this.toastr.success('Attachment added!', 'Success');
+        }
+      },
+      error: (err) => this.toastr.error(`Failed to add attachment: ${err.message}`, 'Error')
+    });
+  }
+
+  handleAttachmentDeleted(event: { issueId: number, attachmentId: number }): void {
+    this.isLoadingIssue = true;
+    this.cdr.markForCheck();
+    this.issueService.deleteAttachment(event.attachmentId).pipe(
+      finalize(() => {
+        this.isLoadingIssue = false;
+        this.cdr.markForCheck();
+      })
+    ).subscribe({
       next: () => {
-        alert(`Issue ${issueIdToDelete} deleted successfully!`);
-        const currentIssueInStream = this._currentIssueSubject.getValue();
-        if (currentIssueInStream && currentIssueInStream.id === issueIdToDelete) {
-          this._currentIssueSubject.next(null);
-          this.issueId = null;
+        const currentIssue = this._currentIssueSubject.getValue();
+        if (currentIssue && currentIssue.id === event.issueId) {
+          const updatedAttachments = currentIssue.attachments.filter(att => att.id !== event.attachmentId);
+          this._currentIssueSubject.next({ ...currentIssue, attachments: updatedAttachments });
+          this.toastr.success('Attachment deleted!', 'Success');
         }
       },
+      error: (err) => this.toastr.error(`Failed to delete attachment: ${err.message}`, 'Error')
+    });
+  }
+
+
+  handleDeleteIssueFromSidebar(issueIdToDelete: number): void {
+    this.isLoadingIssue = true;
+    this.cdr.markForCheck();
+    this.issueService.deleteIssue(issueIdToDelete).pipe(
+      finalize(() => {
+        this.isLoadingIssue = false;
+        this.cdr.markForCheck();
+      })
+    ).subscribe({
+      next: () => {
+        this.toastr.success(`Issue #${issueIdToDelete} deleted successfully!`, 'Success');
+        this._currentIssueSubject.next(null); // Clear current issue
+        this.issueDeletedInDetail.emit(issueIdToDelete); // Notify parent
+      },
       error: (err: any) => {
-        alert(`Failed to delete issue ${issueIdToDelete}. Please try again.`);
+        this.toastr.error(`Failed to delete issue #${issueIdToDelete}: ${err.message}`, 'Error');
       }
     });
   }
 
-  onNavigateToPreviousRequestedFromDetail(): void {
-    // ... (lógica sin cambios)
+  onNavigateToPrevious(): void {
     if (this.canGoPrevious && this.previousIssueId !== null) {
-      this.loadIssueById(String(this.previousIssueId));
+      this.changeIssueRequest.emit(this.previousIssueId);
     }
   }
 
-  onNavigateToNextRequestedFromDetail(): void {
-    // ... (lógica sin cambios)
+  onNavigateToNext(): void {
     if (this.canGoNext && this.nextIssueId !== null) {
-      this.loadIssueById(String(this.nextIssueId));
+      this.changeIssueRequest.emit(this.nextIssueId);
     }
   }
 
   ngOnDestroy(): void {
-    if (this.currentIssueSubscription) {
-      this.currentIssueSubscription.unsubscribe();
-    }
+    this.subscriptions.unsubscribe();
   }
 }

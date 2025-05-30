@@ -1,4 +1,9 @@
-<div class="issues-container flex h-screen overflow-hidden">
+<div class="issues-container flex h-screen overflow-hidden bg-white">
+  <div *ngIf="isLoadingIssue" class="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75 z-50">
+    <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-sky-600"></div>
+    <p class="ml-4 text-slate-600 text-lg">Loading issue data...</p>
+  </div>
+
   <div class="issue-main-content flex-grow overflow-y-auto">
     <ng-container *ngIf="currentIssue$ | async as issue; else noIssueSelectedInDetail">
       <app-issue-detail
@@ -6,9 +11,12 @@
         [currentUser]="currentUserInput"
         [canGoPrevious]="canGoPrevious"
         [canGoNext]="canGoNext"
-        (issuePropertyChange)="handleIssueUpdate($event)"
-        (navigateToPrevious)="onNavigateToPreviousRequestedFromDetail()"
-        (navigateToNext)="onNavigateToNextRequestedFromDetail()">
+        (issueDataChanged)="handleIssueDataChangedFromDetail($event)"
+        (commentAdded)="handleCommentAdded($event)"
+        (attachmentAdded)="handleAttachmentAdded($event)"
+        (attachmentDeleted)="handleAttachmentDeleted($event)"
+        (navigateToPrevious)="onNavigateToPrevious()"
+        (navigateToNext)="onNavigateToNext()">
       </app-issue-detail>
     </ng-container>
     <ng-template #noIssueSelectedInDetail>
@@ -20,7 +28,7 @@
 
   <div class="sidebar-wrapper w-[416px] flex-shrink-0 border-l border-gray-200 h-full overflow-y-auto sticky top-0">
     <ng-container *ngIf="(currentIssue$ | async) as issue">
-      <ng-container *ngIf="(issueOptions$ | async) as options">
+      <ng-container *ngIf="issueOptionsInput as options">
         <app-issue-sidebar
           *ngIf="issue && options && currentUserInput && allProjectUsersInput && allProjectUsersInput.length > 0"
           [issue]="issue"
@@ -30,23 +38,26 @@
           [statusOptions]="options.statusOptions"
           [currentUser]="currentUserInput"
           [allProjectUsers]="allProjectUsersInput"
-          (issuePropertyChange)="handleIssueUpdate($event)"
-          (deleteIssueInitiated)="handleDeleteIssue($event)">
+          (issuePropertyChange)="handleIssuePropertyUpdate($event)"
+          (deleteIssueInitiated)="handleDeleteIssueFromSidebar($event)">
         </app-issue-sidebar>
 
         <div *ngIf="issue && options && (!currentUserInput || !allProjectUsersInput || allProjectUsersInput.length === 0)" class="p-4 text-xs text-gray-400">
           Sidebar context (user/project users) not fully loaded.
         </div>
       </ng-container>
+       <div *ngIf="!issueOptionsInput && issue" class="p-4 text-xs text-gray-400">
+          Issue options not loaded for sidebar.
+      </div>
     </ng-container>
 
-    <div *ngIf="!(currentIssue$ | async) || !currentUserInput" class="p-6 text-center text-gray-400 italic flex items-center justify-center h-full">
+    <div *ngIf="!(currentIssue$ | async)" class="p-6 text-center text-gray-400 italic flex items-center justify-center h-full">
       <div>
         <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
           <path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
         </svg>
         <h3 class="mt-2 text-sm font-medium text-gray-900">Sidebar Not Available</h3>
-        <p class="mt-1 text-sm text-gray-500">Issue data or user context is missing.</p>
+        <p class="mt-1 text-sm text-gray-500">No issue data selected.</p>
       </div>
     </div>
   </div>

@@ -30,4 +30,21 @@ export const ISSUES_ROUTES: Routes = [
   //   loadComponent: () => import('./issue-form/issue-form.component').then(m => m.IssueFormComponent),
   //   title: 'New Issue - Ventus'
   // }
+  // {
+  //   path: 'issues',
+  //   component: IssuesListComponent
+  // },
+  // {
+  //   path: 'issues/:id', // Ruta para un issue específico
+  //   component: IssueComponent
+  // },
+  // {
+  //   path: '',
+  //   redirectTo: '/issues', // Redirige la ruta raíz a /issues
+  //   pathMatch: 'full'
+  // },
+  // {
+  //   path: '**',
+  //   redirectTo: '/issues' // Ruta comodín, redirige cualquier otra cosa a /issues (opcional)
+  // }
 ];

@@ -1,0 +1,185 @@
+<div class="container mx-auto p-4">
+  @if (isLoadingPage()) {
+    <p class="text-center text-slate-600 text-lg py-10">Loading user profile...</p>
+  } @else if (pageError()) {
+    <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md" role="alert">
+      <strong class="font-bold">Error:</strong> {{ pageError() }}
+    </div>
+  } @else if (userForView()) {
+    <div class="bg-white shadow-xl rounded-lg overflow-hidden">
+      <div class="md:flex">
+        <div class="md:w-1/3 p-6 bg-slate-50 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col items-center md:items-start">
+          <img 
+            [src]="userForView()?.profile?.avatar_url || 'https://placehold.co/128x128/E2E8F0/718096?text=No+Avatar'"
+            alt="{{ userForView()?.username }}'s avatar" 
+            class="w-32 h-32 rounded-full mb-4 border-4 border-white shadow-md object-cover"
+            onError="this.src='https://placehold.co/128x128/E2E8F0/718096?text=No+Avatar'"
+          >
+          <div class="text-center md:text-left w-full">
+            <h1 class="text-2xl font-bold text-slate-800">{{ userForView()?.first_name || '' }} {{ userForView()?.last_name || '' }}</h1>
+            <p class="text-md text-slate-600">{{"@" + userForView()?.username }}</p>
+            @if (userForView()?.email && isOwnProfile()) { <p class="text-sm text-slate-500 mt-1">{{ userForView()?.email }}</p>
+            }
+          </div>
+
+          <div class="grid grid-cols-3 gap-2 text-center my-6 w-full border-t border-b border-slate-200 py-4">
+            <div>
+              <p class="text-xl font-bold text-slate-700">{{ userForView()?.stats?.open_assigned || 0 }}</p>
+              <p class="text-xs text-slate-500">Open Assigned</p>
+            </div>
+            <div>
+              <p class="text-xl font-bold text-slate-700">{{ userForView()?.stats?.watched || 0 }}</p>
+              <p class="text-xs text-slate-500">Watched Issues</p>
+            </div>
+            <div>
+              <p class="text-xl font-bold text-slate-700">{{ userForView()?.stats?.comments || 0 }}</p>
+              <p class="text-xs text-slate-500">Comments</p>
+            </div>
+          </div>
+          
+          <div class="w-full">
+            <h3 class="text-sm font-semibold uppercase text-slate-500 mb-2">Bio</h3>
+            @if (userForView()?.profile?.bio) {
+              <p class="text-sm text-slate-600 whitespace-pre-wrap mb-3">{{ userForView()?.profile?.bio }}</p>
+            } @else {
+              <p class="text-sm text-slate-500 italic mb-3">No bio provided.</p>
+            }
+            @if (isOwnProfile()) {
+              <button (click)="openEditModal()" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm transition-colors text-sm">
+                Edit Profile
+              </button>
+            }
+          </div>
+        </div>
+
+        <div class="md:w-2/3 p-6">
+          <div class="mb-4 border-b border-slate-200">
+            <nav class="flex space-x-1 -mb-px" aria-label="Tabs">
+              <button
+                (click)="selectTab('assigned')"
+                [ngClass]="{'border-indigo-500 text-indigo-600': activeTabSignal() === 'assigned', 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300': activeTabSignal() !== 'assigned'}"
+                class="whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm"
+              >
+                Open Assigned Issues
+              </button>
+              <button
+                (click)="selectTab('watched')"
+                [ngClass]="{'border-indigo-500 text-indigo-600': activeTabSignal() === 'watched', 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300': activeTabSignal() !== 'watched'}"
+                class="whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm"
+              >
+                Watched Issues
+              </button>
+              <button
+                (click)="selectTab('comments')"
+                [ngClass]="{'border-indigo-500 text-indigo-600': activeTabSignal() === 'comments', 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300': activeTabSignal() !== 'comments'}"
+                class="whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm"
+              >
+                Comments
+              </button>
+            </nav>
+          </div>
+
+          <div>
+            <h3 class="text-lg font-semibold text-slate-700 mb-3">{{ listTitle() }}</h3>
+            @if (activeTabSignal() === 'assigned' || activeTabSignal() === 'watched') {
+              @if (!tabContent()?.length) { <p class="text-slate-500 italic">No issues found in this section.</p> }
+              @else {
+                @defer(on viewport) {
+                  <table class="min-w-full divide-y divide-slate-200 text-sm">
+                    <thead class="bg-slate-50">
+                      <tr>
+                        <th (click)="applySort('issue_type')" class="px-3 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100">
+                          Type 
+                          @if(currentSortField() === 'issue_type'){ <span [innerHTML]="currentSortDirection() === 'asc' ? '&#9650;' : '&#9660;'"></span> }
+                        </th>
+                        <th (click)="applySort('severity')" class="px-3 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100">
+                          Severity
+                          @if(currentSortField() === 'severity'){ <span [innerHTML]="currentSortDirection() === 'asc' ? '&#9650;' : '&#9660;'"></span> }
+                        </th>
+                        <th (click)="applySort('id')" class="px-3 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100">
+                          Issue #
+                          @if(currentSortField() === 'id'){ <span [innerHTML]="currentSortDirection() === 'asc' ? '&#9650;' : '&#9660;'"></span> }
+                        </th>
+                        <th class="px-3 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider">Title</th>
+                        <th (click)="applySort('status')" class="px-3 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100">
+                          Status
+                          @if(currentSortField() === 'status'){ <span [innerHTML]="currentSortDirection() === 'asc' ? '&#9650;' : '&#9660;'"></span> }
+                        </th>
+                        <th (click)="applySort('updated_at')" class="px-3 py-2 text-left font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100">
+                          Modified
+                          @if(currentSortField() === 'updated_at'){ <span [innerHTML]="currentSortDirection() === 'asc' ? '&#9650;' : '&#9660;'"></span> }
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 bg-white">
+                      @for(issue of asIssues(tabContent()); track issue.id) {
+                        <tr class="hover:bg-slate-50">
+                          <td class="px-3 py-2"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium" [style.background-color]="issue.issue_type?.color || '#E2E8F0'" [style.color]="getTextColor(issue.issue_type?.color)">{{ issue.issue_type?.name || 'N/A' }}</span></td>
+                          <td class="px-3 py-2"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium" [style.background-color]="issue.severity?.color || '#E2E8F0'" [style.color]="getTextColor(issue.severity?.color)">{{ issue.severity?.name || 'N/A' }}</span></td>
+                          <td class="px-3 py-2 text-indigo-600 hover:text-indigo-800"><a [routerLink]="['/issues', issue.id]">#{{issue.id}}</a></td>
+                          <td class="px-3 py-2">{{issue.title}}</td>
+                          <td class="px-3 py-2"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium" [style.background-color]="issue.status?.color || '#E2E8F0'" [style.color]="getTextColor(issue.status?.color)">{{ issue.status?.name || 'N/A' }}</span></td>
+                          <td class="px-3 py-2">{{issue.updated_at | date:'shortDate'}}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                } @placeholder { <p>Loading issues table...</p> }
+              }
+            }
+            @if (activeTabSignal() === 'comments') {
+              @if (!tabContent()?.length) { <p class="text-slate-500 italic">This user has not made any comments.</p> }
+              @else {
+                <ul class="space-y-4">
+                  @for(comment of asComments(tabContent()); track comment.id) {
+                    <li class="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                      <p class="text-sm text-slate-700 mb-1 whitespace-pre-wrap">{{comment.text}}</p>
+                      <p class="text-xs text-slate-500">
+                        on issue <a [routerLink]="['/issues', comment.issue]" fragment="comment-{{comment.id}}" class="text-indigo-600 hover:underline">#{{comment.issue}}</a> 
+                        - {{ comment.created_at | date:'medium' }}
+                      </p>
+                    </li>
+                  }
+                </ul>
+              }
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+
+    @if (showEditModal() && isOwnProfile() && userForView(); as userToEdit) {
+      <div class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+        <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-lg">
+          <h3 class="text-xl font-semibold text-slate-800 mb-4">Edit Profile</h3>
+          <form [formGroup]="editProfileForm" (ngSubmit)="saveProfileChanges()">
+            <div class="mb-4">
+              <label for="profileBio" class="block text-sm font-medium text-slate-700 mb-1">Bio</label>
+              <textarea id="profileBio" formControlName="bio" rows="4" class="w-full p-2 border border-slate-300 rounded-md shadow-sm"></textarea>
+            </div>
+            <div class="mb-6">
+              <label for="profileAvatar" class="block text-sm font-medium text-slate-700 mb-1">Avatar</label>
+              <input type="file" id="profileAvatar" (change)="onFileSelected($event)" accept="image/*" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+              @if (avatarPreviewUrl) {
+                <img [src]="avatarPreviewUrl" alt="Avatar preview" class="mt-3 w-24 h-24 rounded-full object-cover border shadow-sm">
+              } @else if (userToEdit.profile?.avatar_url) {
+                 <img [src]="userToEdit.profile.avatar_url" alt="Current avatar" class="mt-3 w-24 h-24 rounded-full object-cover border shadow-sm" onError="this.src='https://placehold.co/96x96/E2E8F0/718096?text=No+Avatar'">
+              } @else {
+                <div class="mt-3 w-24 h-24 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 text-xs border">No Avatar</div>
+              }
+            </div>
+            <div class="flex justify-end space-x-3">
+              <button type="button" (click)="closeEditModal()" class="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md" [disabled]="isUpdatingProfile()">Cancel</button>
+              <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md disabled:opacity-50" [disabled]="isUpdatingProfile() || editProfileForm.invalid">
+                {{ isUpdatingProfile() ? 'Saving...' : 'Save Changes' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    }
+
+  } @else {
+    <p class="text-center text-slate-500 py-10">User not found or an error occurred.</p>
+  }
+</div>

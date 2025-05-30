@@ -1,0 +1,25 @@
+/* src/app/issues/feature/issues-list/issues-list.component.css */
+/* Add any component-specific styles here if Tailwind isn't sufficient. */
+
+/* Example: Ensure dropdowns appear above other content if z-index issues arise */
+.assignee-dropdown-menu {
+    z-index: 20; /* Ensure it's above other elements in the table row */
+  }
+  
+  /* You might want to style the sort icons if not using a dedicated component */
+  .sort-icon svg {
+    width: 0.75rem; /* 12px */
+    height: 0.75rem; /* 12px */
+    transition: color 0.15s ease-in-out;
+  }
+  
+  .sort-icon .default-sort-arrows {
+    color: #9ca3af; /* Tailwind gray-400 */
+  }
+  .sort-icon .active-sort-arrow {
+    color: #3b82f6; /* Tailwind sky-600 */
+  }
+  .group:hover .sort-icon .default-sort-arrows {
+    color: #4b5563; /* Tailwind gray-600 */
+  }
+  

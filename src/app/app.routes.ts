@@ -1,29 +1,34 @@
-// src/app/app.routes.ts
 import { Routes } from '@angular/router';
-import { IssuesListComponent } from './issues/feature/issues-list/issues-list.component'; // Ajusta la ruta si es necesario
-import { IssueComponent } from './issues/feature/issue/issue.component'; 
-
-import { authGuard } from './accounts/guards/auth.guard'; // Import the guard
+import { AuthGuard } from './core/guards/auth.guard'; // We'll create this guard
 
 export const routes: Routes = [
   {
-    path: 'accounts',
-    loadChildren: () =>
-      import('./accounts/feature/accounts.routes').then((m) => m.ACCOUNTS_ROUTES),
+    path: 'users', // User selection page
+    loadComponent: () => import('./auth/components/user-select/user-select.component').then(m => m.UserSelectComponent),
+    title: 'Select User'
   },
   {
     path: 'issues',
-    loadChildren: () =>
-      import('./issues/feature/issues.routes').then((m) => m.ISSUES_ROUTES),
-    canActivate: [authGuard] // Protect the issues route
+    loadChildren: () => import('./issues-v2/issues.routes').then(m => m.ISSUES_ROUTES),
+    canActivate: [AuthGuard] // Protect this route
+  },
+  {
+    path: 'settings',
+    loadChildren: () => import('./settings/settings.routes').then(m => m.SETTINGS_ROUTES),
+    canActivate: [AuthGuard] // Protect this route
+  },
+  {
+    path: 'profile', 
+    loadChildren: () => import('./user-profile/user-profile.routes').then(m => m.USER_PROFILE_ROUTES),
+    canActivate: [AuthGuard] // Protect this route
   },
   {
     path: '',
-    redirectTo: 'accounts/select-user', // Default to user selection
-    pathMatch: 'full',
+    redirectTo: '/users', // Default to user selection page
+    pathMatch: 'full'
   },
   {
     path: '**',
-    redirectTo: 'accounts/select-user', // Or a dedicated NotFoundComponent
-  },
+    redirectTo: '/users' // Fallback to user selection page
+  }
 ];

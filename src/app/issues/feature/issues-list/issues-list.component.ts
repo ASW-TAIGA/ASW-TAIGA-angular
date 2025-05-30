@@ -1,191 +1,372 @@
-import { Component, OnInit, inject, HostListener, ElementRef } from '@angular/core';
+import { Component, OnInit, inject, HostListener, ElementRef, ChangeDetectorRef, ChangeDetectionStrategy, OnDestroy, signal, WritableSignal, effect } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { Observable, of, forkJoin } from 'rxjs';
-import { map, tap, catchError } from 'rxjs/operators';
+import { Observable, of, forkJoin, Subject, Subscription } from 'rxjs';
+import { map, tap, catchError, debounceTime, distinctUntilChanged, switchMap, finalize } from 'rxjs/operators';
 import {
   Issue,
   IssueService,
   UserLite,
   IssueOptions,
   IssueUpdatePayload,
-  NewIssueFormData
+  NewIssueFormData,
+  GetIssuesParams,
+  PaginatedIssuesResponse,
+  AppliedFilters
 } from '../../data-access/issue.service';
 import { IssueFormComponent } from '../issue-form/issue-form.component';
+import { SortIconComponent } from '../../ui/sort-icon/sort-icon.component';
+import { FilterIssuesModalComponent } from '../../ui/filter-issues-modal/filter-issues-modal.component';
+import { BulkAddIssuesModalComponent } from '../../ui/bulk-add-issues-modal/bulk-add-issues-modal.component';
+import { ToastrService } from 'ngx-toastr';
 
-type SortableColumnKey = 'issue_type' | 'severity' | 'priority' | 'status';
+type SortableColumnKey = 'issue_type' | 'severity' | 'priority' | 'status' | 'title' | 'id' | 'updated_at';
 
 @Component({
   selector: 'app-issues-list',
   standalone: true,
-  imports: [CommonModule, DatePipe, IssueFormComponent],
+  imports: [CommonModule, DatePipe, FormsModule, IssueFormComponent, SortIconComponent, FilterIssuesModalComponent, BulkAddIssuesModalComponent],
   templateUrl: './issues-list.component.html',
-  styleUrls: ['./issues-list.component.css']
+  styleUrls: ['./issues-list.component.css'],
+  changeDetection: ChangeDetectionStrategy.OnPush, // Remains OnPush, Signals work well with it
 })
-export class IssuesListComponent implements OnInit {
+export class IssuesListComponent implements OnInit, OnDestroy {
   private issueService = inject(IssueService);
   private router = inject(Router);
-  private elementRef = inject(ElementRef);
+  private cdr = inject(ChangeDetectorRef); // May still be needed for explicit triggers after async non-signal ops
+  private toastr = inject(ToastrService);
+  Math = Math;
 
-  issues: Issue[] = [];
-  isLoading: boolean = true;
+  // State managed with Signals
+  issues: WritableSignal<Issue[]> = signal([]);
+  isLoading: WritableSignal<boolean> = signal(true);
+  errorMessage: WritableSignal<string | null> = signal(null);
+  
+  currentSortColumn: WritableSignal<SortableColumnKey | null> = signal('updated_at');
+  sortDirection: WritableSignal<'asc' | 'desc'> = signal('desc');
 
-  currentSortColumn: SortableColumnKey | null = null;
-  sortDirection: 'asc' | 'desc' = 'asc';
+  showNewIssueForm: WritableSignal<boolean> = signal(false);
+  issueOptionsForForm: WritableSignal<IssueOptions | null> = signal(null);
+  currentUser: WritableSignal<UserLite | null> = signal(null);
+  allProjectUsers: WritableSignal<UserLite[]> = signal([]);
 
-  showNewIssueForm: boolean = false;
-  issueOptionsForForm: IssueOptions | null = null;
-  currentUser: UserLite | null = null;
-  allProjectUsers: UserLite[] = [];
+  activeAssigneeDropdownForIssueId: WritableSignal<number | string | null> = signal(null);
 
-  activeAssigneeDropdownForIssueId: number | string | null = null;
+  searchTerm: WritableSignal<string> = signal('');
+  private searchSubject = new Subject<string>();
+  private searchSubscription: Subscription | undefined;
 
-  constructor() {}
+  currentPage: WritableSignal<number> = signal(1);
+  itemsPerPage: WritableSignal<number> = signal(15);
+  totalIssues: WritableSignal<number> = signal(0);
+
+  showFiltersModal: WritableSignal<boolean> = signal(false);
+  currentAppliedFilters: WritableSignal<AppliedFilters> = signal({});
+  showBulkAddModal: WritableSignal<boolean> = signal(false);
+
+  private avatarColorCache = new Map<string, string>();
+  private tailwindColors = [
+    '#EF4444', '#F97316', '#F59E0B', '#EAB308', '#84CC16', '#22C55E',
+    '#10B981', '#0D9488', '#06B6D4', '#0EA5E9', '#3B82F6', '#6366F1',
+    '#8B5CF6', '#A855F7', '#D946EF', '#EC4899', '#F43F5E'
+  ];
+
+  constructor() {
+    // Example effect for logging or reacting to signal changes (optional)
+    // effect(() => {
+    //   console.log('Current search term signal:', this.searchTerm());
+    // });
+  }
 
   ngOnInit(): void {
     this.loadInitialData();
+    this.searchSubscription = this.searchSubject.pipe(
+      debounceTime(400),
+      distinctUntilChanged(),
+      switchMap((term) => { // Pass term explicitly
+        this.currentPage.set(1);
+        return this.fetchIssuesData(this.buildRequestParams(term)); // Pass term to build params
+      })
+    ).subscribe();
+  }
+
+  ngOnDestroy(): void {
+    this.searchSubscription?.unsubscribe();
+  }
+  
+  private buildRequestParams(currentSearchTerm?: string): GetIssuesParams {
+    const params: GetIssuesParams = {
+      page: this.currentPage(),
+    };
+    const filters = this.currentAppliedFilters();
+    if (filters.status !== null && filters.status !== undefined) params.status = filters.status;
+    if (filters.priority !== null && filters.priority !== undefined) params.priority = filters.priority;
+    if (filters.assignee_id !== null && filters.assignee_id !== undefined) params.assignee_id = filters.assignee_id;
+    if (filters.creator_id !== null && filters.creator_id !== undefined) params.creator_id = filters.creator_id;
+
+    const termToUse = currentSearchTerm !== undefined ? currentSearchTerm : this.searchTerm();
+    if (termToUse.trim()) {
+      params.q = termToUse.trim();
+    }
+    Object.keys(params).forEach(key => (params as any)[key] === undefined && delete (params as any)[key]);
+    return params;
   }
 
   loadInitialData(): void {
-    this.isLoading = true;
+    this.isLoading.set(true);
+    this.errorMessage.set(null);
 
     forkJoin({
-      issues: this.issueService.getIssues(),
-      currentUser: this.issueService.getCurrentUser(),
-      projectUsers: this.issueService.getProjectUsers(),
+      currentUser: this.issueService.getCurrentUserFromAccountService(),
       issueOptions: this.issueService.getIssueOptions()
     }).pipe(
-      tap(data => console.log('IssuesListComponent: Initial data fetched from service', data)),
-      catchError(error => {
-        console.error('IssuesListComponent: Error loading initial data', error);
-        this.isLoading = false;
-        // Aquí podrías inicializar con arrays/objetos vacíos para evitar errores en la plantilla
-        this.issues = [];
-        this.currentUser = null;
-        this.allProjectUsers = [];
-        this.issueOptionsForForm = null;
-        // Mostrar un mensaje de error en la UI sería ideal aquí
-        alert('Failed to load initial data. Please check connectivity or API status.');
-        return of(null); // Devuelve un observable que completa para que la cadena no se rompa
+      tap((staticData: any) => {
+        this.currentUser.set(staticData.currentUser);
+        this.issueOptionsForForm.set(staticData.issueOptions);
+        console.log(staticData);
+      }),
+      switchMap(() => this.fetchIssuesData(this.buildRequestParams())),
+      catchError((error: any) => {
+        this.errorMessage.set(`Failed to load essential data: ${error.message || 'Unknown error'}`);
+        this.isLoading.set(false);
+        return of(null);
       })
-    ).subscribe(data => {
-      if (data) {
-        this.issues = data.issues;
-        this.currentUser = data.currentUser;
-        this.allProjectUsers = data.projectUsers;
-        this.issueOptionsForForm = data.issueOptions;
+    ).subscribe();
+  }
 
-        if (this.currentSortColumn) {
-          this.applyCurrentSort();
+  fetchIssuesData(params: GetIssuesParams): Observable<PaginatedIssuesResponse | null> {
+    this.isLoading.set(true);
+    this.errorMessage.set(null);
+    // Not calling cdr.detectChanges() here as signal updates should trigger template refresh
+
+    return this.issueService.getIssues(params).pipe(
+      tap(response => {
+        if (response) {
+          console.log(response);
+          this.issues.set(response.results);
+          this.totalIssues.set(response.count);
+          if (this.currentSortColumn()) { 
+            this.applyClientSideSort(); // This will internally update this.issues signal
+          }
+        } else {
+          this.issues.set([]);
+          this.totalIssues.set(0);
         }
-      }
-      this.isLoading = false;
-      console.log('IssuesListComponent: Initial data loading complete.');
-    });
+      }),
+      catchError((error: any) => {
+        this.errorMessage.set(`Failed to load issues: ${error.message || 'Unknown error'}`);
+        this.issues.set([]);
+        this.totalIssues.set(0);
+        return of(null); 
+      }),
+      finalize(() => {
+        this.isLoading.set(false);
+        // Not calling cdr.detectChanges() here as signal updates should trigger template refresh
+      })
+    );
+  }
+  
+  onSearchSubmit(): void { 
+    this.searchSubject.next(this.searchTerm().trim());
+  }
+
+  // Make sure the template calls this with the new value for searchTerm
+  onSearchTermChanged(event: Event): void {
+    const term = (event.target as HTMLInputElement).value;
+    this.searchTerm.set(term);
+    this.searchSubject.next(term.trim());
+}
+  
+  goToPage(page: number): void {
+    if (page < 1 || (page -1) * this.itemsPerPage() >= this.totalIssues() && this.totalIssues() > 0) {
+        return;
+    }
+    this.currentPage.set(page);
+    this.fetchIssuesData(this.buildRequestParams()).subscribe();
   }
 
   selectIssueAndNavigate(issue: Issue): void {
-    console.log('IssuesListComponent: Navigating to issue ID:', issue.id);
     this.router.navigate(['/issues', issue.id]);
   }
 
   toggleNewIssueForm(): void {
-    this.showNewIssueForm = !this.showNewIssueForm;
+    this.showNewIssueForm.update(v => !v);
   }
 
   handleIssueCreated(eventPayload: { issueData: NewIssueFormData, files: File[] }): void {
-    console.log('IssuesListComponent: handleIssueCreated, data from form:', eventPayload.issueData);
-    if (!this.currentUser) {
-      alert("Error: Current user not available for creating issue.");
+    if (!this.currentUser()) {
+      this.toastr.error("Cannot create issue: current user not available.", "Error");
       return;
     }
+    this.isLoading.set(true);
 
-    this.issueService.createIssue(eventPayload.issueData, this.currentUser).subscribe({
-      next: (createdIssue) => {
-        console.log('IssuesListComponent: Issue created successfully by service:', createdIssue);
-        this.issues = [createdIssue, ...this.issues];
-        if (this.currentSortColumn) {
-          this.applyCurrentSort();
+    this.issueService.createIssue(eventPayload.issueData).pipe(
+      switchMap(createdIssue => {
+        if (eventPayload.files && eventPayload.files.length > 0) {
+          const attachmentObservables = eventPayload.files.map(file =>
+            this.issueService.addAttachment(createdIssue.id, file).pipe(
+              catchError(attachError => {
+                this.toastr.error(`Failed to upload attachment ${file.name}: ${attachError.message}`, "Attachment Error");
+                return of(null); 
+              })
+            )
+          );
+          return forkJoin(attachmentObservables).pipe(map(() => createdIssue));
         }
-        this.showNewIssueForm = false;
-        this.selectIssueAndNavigate(createdIssue);
-      },
-      error: (err) => {
-        console.error('IssuesListComponent: Error creating issue:', err);
-        alert(`Failed to create issue: ${err.message || 'Unknown error'}`);
+        return of(createdIssue);
+      }),
+      catchError(err => {
+        this.toastr.error(`Failed to create issue: ${err.message || 'Unknown error'}`, "Creation Error");
+        return of(null);
+      }),
+      finalize(() => {
+        this.isLoading.set(false);
+      })
+    ).subscribe(finalIssue => {
+      if (finalIssue) {
+        this.toastr.success(`Issue #${finalIssue.id} created!`, "Success");
+        this.showNewIssueForm.set(false);
+        this.currentPage.set(1); 
+        this.fetchIssuesData(this.buildRequestParams()).subscribe(() => {
+             this.selectIssueAndNavigate(finalIssue); 
+        });
       }
     });
   }
 
   sortBy(column: SortableColumnKey): void {
-    if (this.currentSortColumn === column) {
-      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+    if (this.currentSortColumn() === column) {
+      this.sortDirection.update(dir => dir === 'asc' ? 'desc' : 'asc');
     } else {
-      this.currentSortColumn = column;
-      this.sortDirection = 'asc';
+      this.currentSortColumn.set(column);
+      this.sortDirection.set('asc');
     }
-    this.applyCurrentSort();
+    this.applyClientSideSort();
   }
 
-  private applyCurrentSort(): void {
-    if (!this.currentSortColumn || !this.issues || this.issues.length === 0) return;
-    const column = this.currentSortColumn;
-    this.issues.sort((a, b) => {
-      let valA: string | number = 0;
-      let valB: string | number = 0;
-      switch (column) {
-        case 'issue_type': valA = a.issue_type.order; valB = b.issue_type.order; break;
-        case 'severity':   valA = a.severity.order;   valB = b.severity.order;   break;
-        case 'priority':   valA = a.priority.order;   valB = b.priority.order;   break;
-        case 'status':     valA = a.status.order;     valB = b.status.order;     break;
+  private applyClientSideSort(): void {
+    const currentSortCol = this.currentSortColumn();
+    if (!currentSortCol || this.issues().length === 0) return;
+    
+    const sortedIssues = [...this.issues()].sort((a, b) => {
+      let valA: any;
+      let valB: any;
+      switch (currentSortCol) {
+        case 'issue_type': valA = a.issue_type?.order ?? a.issue_type?.name; valB = b.issue_type?.order ?? b.issue_type?.name; break;
+        case 'severity':   valA = a.severity?.order ?? a.severity?.name;   valB = b.severity?.order ?? b.severity?.name;   break;
+        case 'priority':   valA = a.priority?.order ?? a.priority?.name;   valB = b.priority?.order ?? b.priority?.name;   break;
+        case 'status':     valA = a.status?.order ?? a.status?.name;     valB = b.status?.order ?? b.status?.name;     break;
+        case 'title':      valA = a.title.toLowerCase(); valB = b.title.toLowerCase(); break;
+        case 'id':         valA = a.id; valB = b.id; break;
+        case 'updated_at': valA = new Date(a.updated_at).getTime(); valB = new Date(b.updated_at).getTime(); break;
+        default: return 0;
       }
       let comparison = 0;
       if (valA > valB) comparison = 1;
       else if (valA < valB) comparison = -1;
-      return this.sortDirection === 'asc' ? comparison : comparison * -1;
+      return this.sortDirection() === 'asc' ? comparison : comparison * -1;
     });
-    this.issues = [...this.issues];
+    this.issues.set(sortedIssues);
   }
 
   toggleAssigneeDropdown(issueId: number | string, event: MouseEvent): void {
     event.stopPropagation();
-    if (this.activeAssigneeDropdownForIssueId === issueId) {
-      this.activeAssigneeDropdownForIssueId = null;
-    } else {
-      this.activeAssigneeDropdownForIssueId = issueId;
-    }
+    this.activeAssigneeDropdownForIssueId.update(current => current === issueId ? null : issueId);
   }
 
   changeAssignee(targetIssue: Issue, newAssignee: UserLite | null, event: MouseEvent): void {
     event.stopPropagation();
-    const payload: IssueUpdatePayload = {
-      assignee_id: newAssignee ? newAssignee.id : null
-    };
+    const payload: IssueUpdatePayload = { assignee_id: newAssignee ? newAssignee.id : null };
     this.issueService.updateIssue(targetIssue.id, payload).subscribe({
       next: (updatedIssue) => {
-        const index = this.issues.findIndex(iss => iss.id === updatedIssue.id);
-        if (index > -1) {
-          this.issues[index] = updatedIssue;
-          this.issues = [...this.issues];
-        }
+        this.issues.update(currentIssues => 
+            currentIssues.map(iss => iss.id === updatedIssue.id ? updatedIssue : iss)
+        );
+        this.activeAssigneeDropdownForIssueId.set(null);
+        this.toastr.success(`Assignee updated for Issue #${targetIssue.id}`, "Success");
       },
       error: (err) => {
-        console.error('Failed to update assignee in list:', err);
-        alert('Error updating assignee. Please try again.');
-      },
-      complete: () => {
-        this.activeAssigneeDropdownForIssueId = null;
+        this.toastr.error(`Error updating assignee: ${err.message || 'Unknown error'}`, "Error");
+        this.activeAssigneeDropdownForIssueId.set(null);
       }
     });
   }
 
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: MouseEvent): void {
-    if (this.activeAssigneeDropdownForIssueId !== null) {
+    if (this.activeAssigneeDropdownForIssueId() !== null) {
       const targetElement = event.target as HTMLElement;
-      if (!targetElement.closest('.assignee-dropdown-trigger, .assignee-dropdown-menu')) {
-        this.activeAssigneeDropdownForIssueId = null;
+      const clickedInsideTriggerOrMenu = targetElement.closest('.assignee-dropdown-trigger, .assignee-dropdown-menu');
+      if (!clickedInsideTriggerOrMenu) {
+        this.activeAssigneeDropdownForIssueId.set(null);
       }
     }
+  }
+
+  getDynamicAvatarColor(username?: string): string {
+    if (!username) return this.tailwindColors[0];
+    if (this.avatarColorCache.has(username)) return this.avatarColorCache.get(username)!;
+    let hash = 0;
+    for (let i = 0; i < username.length; i++) {
+      hash = username.charCodeAt(i) + ((hash << 5) - hash);
+      hash = hash & hash;
+    }
+    const index = Math.abs(hash) % this.tailwindColors.length;
+    const color = this.tailwindColors[index];
+    this.avatarColorCache.set(username, color);
+    return color;
+  }
+
+  getUserInitials(firstName?: string, lastName?: string): string {
+    let initials = ((firstName?.[0] || '') + (lastName?.[0] || '')).toUpperCase();
+    return initials || '?';
+  }
+
+  getBadgeBackgroundColor(color?: string): string {
+    return color ? `${color}33` : '#E5E7EB'; 
+  }
+  getBadgeTextColor(color?: string): string {
+    return color || '#374151'; 
+  }
+
+  openFiltersModal(): void {
+    this.showFiltersModal.set(true);
+  }
+
+  handleApplyFilters(filters: AppliedFilters): void {
+    this.currentAppliedFilters.set({
+        status: filters.status === null ? undefined : filters.status,
+        priority: filters.priority === null ? undefined : filters.priority,
+        assignee_id: filters.assignee_id === null ? undefined : filters.assignee_id,
+        creator_id: filters.creator_id === null ? undefined : filters.creator_id
+    });
+    this.showFiltersModal.set(false);
+    this.currentPage.set(1);
+    this.fetchIssuesData(this.buildRequestParams()).subscribe();
+  }
+
+  openBulkAddModal(): void {
+    this.showBulkAddModal.set(true);
+  }
+
+  handleBulkCreateIssues(issuesToCreate: Partial<NewIssueFormData>[]): void {
+     if (issuesToCreate.length === 0) {
+        this.showBulkAddModal.set(false);
+        return;
+    }
+    this.isLoading.set(true);
+    this.issueService.bulkCreateIssues(issuesToCreate).subscribe({
+        next: (createdIssues) => {
+            this.toastr.success(`${createdIssues.length} issue(s) created successfully!`, "Bulk Add Success");
+            this.showBulkAddModal.set(false);
+            this.currentPage.set(1); 
+            this.fetchIssuesData(this.buildRequestParams()).subscribe();
+        },
+        error: (err) => {
+            this.toastr.error(`Error during bulk creation: ${err.message || 'Unknown error'}`, "Bulk Add Error");
+            this.isLoading.set(false); 
+        }
+    });
   }
 }
