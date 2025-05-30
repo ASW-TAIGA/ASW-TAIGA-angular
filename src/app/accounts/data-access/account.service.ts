@@ -20,7 +20,7 @@ export class AccountService {
   public readonly currentUserProfile$ = this.currentUserProfileSubject.asObservable();
   public readonly currentApiKey$ = this.currentApiKeySubject.asObservable();
   public readonly isAuthenticated$: Observable<boolean> = this.currentApiKey$.pipe(
-    map(key => !!key)
+    map((key: string | null) => !!key)
   );
 
   /**

@@ -1,192 +1,321 @@
-// src/app/issues/data-access/issue.service.ts
-import { Injectable } from '@angular/core';
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Observable, throwError, forkJoin, of } from 'rxjs'; // Asegúrate de importar forkJoin y of
+import { Injectable, inject } from '@angular/core';
+import { HttpClient, HttpErrorResponse, HttpHeaders, HttpParams } from '@angular/common/http';
+import { Observable, throwError, forkJoin, of } from 'rxjs';
 import { catchError, map, tap } from 'rxjs/operators';
+import { AccountService } from '../../accounts/data-access/account.service';
+import { UserProfileData } from '../../accounts/models/user.model';
 
-// --- INTERFACES (sin cambios) ---
-export interface UserLite { id: number; username: string; first_name: string; last_name: string; avatar_url: string; }
-export interface StatusDetail { id: number; name: string; color: string; order: number; slug: string; is_closed: boolean; }
-export interface IssueTypeDetail { id: number; name: string; color: string; order: number; }
-export interface SeverityDetail { id: number; name: string; color: string; order: number; }
-export interface PriorityDetail { id: number; name: string; color: string; order: number; }
-export interface CommentDetail { id: number; author: UserLite; text: string; created_at: string; updated_at: string; }
-export interface AttachmentDetail { id: number; issue: number; file: string; file_name: string; file_size: string; file_url: string; uploaded_at: string; }
-export interface Issue { id: number; title: string; description: string; status: StatusDetail; issue_type: IssueTypeDetail; severity: SeverityDetail; priority: PriorityDetail; creator: UserLite; assignee: UserLite | null; created_at: string; updated_at: string; deadline: string | null; watchers: UserLite[]; comments: CommentDetail[]; attachments: AttachmentDetail[]; }
-export interface IssueOptions { statusOptions: StatusDetail[]; typeOptions: IssueTypeDetail[]; severityOptions: SeverityDetail[]; priorityOptions: PriorityDetail[]; }
-export interface IssueUpdatePayload { title?: string; description?: string; status_id?: number; issue_type_id?: number; severity_id?: number; priority_id?: number; assignee_id?: number | null; deadline?: string | null; watchers_to_add?: number[]; watchers_to_remove?: number[]; }
-export interface NewIssueFormData {
+// Interfaces based on API contract and existing structure
+export interface UserLite {
+  id: number;
+  username: string;
+  first_name: string;
+  last_name: string;
+  avatar_url: string | null;
+}
+
+export interface StatusDetail {
+  id: number;
+  name: string;
+  color: string; // Hex color or Tailwind class
+  order: number;
+  is_closed: boolean; // From existing frontend model, check if backend provides
+}
+
+export interface IssueTypeDetail {
+  id: number;
+  name: string;
+  color: string; // Hex color or Tailwind class
+  order: number;
+}
+
+export interface SeverityDetail {
+  id: number;
+  name: string;
+  color: string; // Hex color or Tailwind class
+  order: number;
+}
+
+export interface PriorityDetail {
+  id: number;
+  name: string;
+  color: string; // Hex color or Tailwind class
+  order: number;
+}
+
+export interface CommentDetail {
+  id: number;
+  author: UserLite;
+  text: string;
+  created_at: string;
+  updated_at: string;
+  issue: number; // Issue ID
+}
+
+export interface AttachmentDetail {
+  id: number;
+  issue: number; // Issue ID
+  file: string; // URL to the file (read-only from contract)
+  file_name: string;
+  file_size: number; // Size in bytes
+  file_url: string; // Full URL
+  uploaded_at: string;
+}
+
+export interface Issue {
+  id: number;
   title: string;
   description: string;
-  status_id: number | null;
-  issue_type_id: number | null; // CAMBIADO de type_id
-  severity_id: number | null;
-  priority_id: number | null;
-  assignee_id: number | null;
-  deadline?: string | null;
-  watcher_ids?: number[]; // AÑADIDO: para los watchers
+  status: StatusDetail;
+  issue_type: IssueTypeDetail;
+  severity: SeverityDetail;
+  priority: PriorityDetail;
+  creator: UserLite;
+  assignee: UserLite | null;
+  created_at: string;
+  updated_at: string;
+  deadline: string | null;
+  watchers: UserLite[];
+  comments: CommentDetail[];
+  attachments: AttachmentDetail[];
 }
+
+export interface PaginatedIssuesResponse {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: Issue[];
+}
+
+export interface IssueOptions {
+  statusOptions: StatusDetail[];
+  typeOptions: IssueTypeDetail[];
+  severityOptions: SeverityDetail[];
+  priorityOptions: PriorityDetail[];
+}
+
+export interface IssueUpdatePayload {
+  title?: string;
+  description?: string;
+  status_id?: number;
+  issue_type_id?: number;
+  severity_id?: number;
+  priority_id?: number;
+  assignee_id?: number | null;
+  deadline?: string | null;
+  watcher_ids?: number[]; // Used to set the complete list of watchers
+}
+
+export interface NewIssueFormData {
+  title: string;
+  description?: string;
+  status_id?: number | null;
+  issue_type_id?: number | null;
+  severity_id?: number | null;
+  priority_id?: number | null;
+  assignee_id?: number | null;
+  deadline?: string | null;
+  watcher_ids?: number[];
+}
+
+export interface GetIssuesParams {
+  status?: number; // Changed from status_id to match API contract for GET /issues
+  priority?: number; // Changed from priority_id
+  assignee_id?: number;
+  creator_id?: number;
+  q?: string;
+  page?: number;
+}
+
+// Define and export AppliedFilters here
+export interface AppliedFilters {
+  status?: number | null; // Matching GetIssuesParams keys
+  priority?: number | null;
+  assignee_id?: number | null;
+  creator_id?: number | null;
+}
+
 
 @Injectable({
   providedIn: 'root'
 })
 export class IssueService {
-  // URL base para los issues (sin la barra final aquí)
-  private issuesApiBaseUrl = 'https://asw-taiga-1.onrender.com/api/v1/issues';
+  private http = inject(HttpClient);
+  private accountService = inject(AccountService);
 
-  // URL base para settings (si es diferente y se usa en getIssueOptions)
-  private settingsApiBaseUrl = 'https://asw-taiga-1.onrender.com/api/v1/settings';
+  private API_BASE_URL = 'http://localhost:8000/api/v1';
 
-  // URL base general (si es diferente para usuarios, etc.)
-  private generalApiBaseUrl = 'https://asw-taiga-1.onrender.com/api/v1';
+  private createAuthHeaders(): HttpHeaders {
+    const apiKey = this.accountService.getCurrentApiKeySnapshot();
+    if (!apiKey) {
+      console.error('IssueService: API Key is not available. Requests will likely fail.');
+      return new HttpHeaders();
+    }
+    return new HttpHeaders().set('Authorization', `ApiKey ${apiKey}`);
+  }
 
-  constructor(private http: HttpClient) { }
-
-  getIssues(): Observable<Issue[]> {
-    console.log('IssueService: Fetching all issues from API:', `${this.issuesApiBaseUrl}/`);
-    // Añadimos la barra si el endpoint de lista la requiere
-    return this.http.get<Issue[]>(`${this.issuesApiBaseUrl}/`).pipe(
-      tap(issues => console.log(`IssueService: Fetched ${issues.length} issues via API`)),
+  getIssues(params?: GetIssuesParams): Observable<PaginatedIssuesResponse> {
+    const headers = this.createAuthHeaders();
+    let httpParams = new HttpParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        // Ensure not to send empty strings for optional params if API expects them to be absent
+        if (value !== undefined && value !== null && String(value).trim() !== '') {
+          httpParams = httpParams.set(key, String(value));
+        }
+      });
+    }
+    return this.http.get<PaginatedIssuesResponse>(`${this.API_BASE_URL}/issues/`, { headers, params: httpParams }).pipe(
       catchError(this.handleError)
     );
   }
 
   getIssueOptions(): Observable<IssueOptions> {
-    console.log('IssueService: Fetching issue options from API using forkJoin');
+    const headers = this.createAuthHeaders();
     return forkJoin({
-      priorityOptions: this.http.get<PriorityDetail[]>(`${this.settingsApiBaseUrl}/priorities/`),
-      severityOptions: this.http.get<SeverityDetail[]>(`${this.settingsApiBaseUrl}/severities/`),
-      statusOptions:   this.http.get<StatusDetail[]>(`${this.settingsApiBaseUrl}/statuses/`),
-      typeOptions:     this.http.get<IssueTypeDetail[]>(`${this.settingsApiBaseUrl}/types/`)
+      priorityOptions: this.http.get<PriorityDetail[]>(`${this.API_BASE_URL}/settings/priorities/`, { headers }),
+      severityOptions: this.http.get<SeverityDetail[]>(`${this.API_BASE_URL}/settings/severities/`, { headers }),
+      statusOptions:   this.http.get<StatusDetail[]>(`${this.API_BASE_URL}/settings/statuses/`, { headers }),
+      typeOptions:     this.http.get<IssueTypeDetail[]>(`${this.API_BASE_URL}/settings/types/`, { headers })
     }).pipe(
-      map(results => {
-        console.log('IssueService: Combined issue options from API:', results);
-        return results as IssueOptions;
-      }),
+      map(results => results as IssueOptions),
+      tap((results: any) => console.log(results)),
       catchError(this.handleError)
     );
   }
 
-  // --- MÉTODO getIssue ACTUALIZADO ---
   getIssue(issueId: string | number): Observable<Issue> {
-    const url = `${this.issuesApiBaseUrl}/${issueId}/`; // Añadida la barra inclinada al final
-    console.log(`IssueService: Fetching issue ${issueId} from API: ${url}`);
-    return this.http.get<Issue>(url).pipe(
-      tap(issue => console.log(`IssueService: Fetched issue ${issueId} via API`, issue)),
+    const headers = this.createAuthHeaders();
+    const url = `${this.API_BASE_URL}/issues/${issueId}/`;
+    return this.http.get<Issue>(url, { headers }).pipe(
       catchError(this.handleError)
     );
   }
 
-  createIssue(issueData: NewIssueFormData, creator: UserLite): Observable<Issue> {
-    console.log('IssueService: Creating new issue via API with data:', issueData);
-
-    // Preparamos el payload según lo que espera la API.
-    // La API espera IDs numéricos para status, type, severity, priority.
-    // NewIssueFormData ya los tiene como number | null.
-    // La API espera assignee_id como number (el ejemplo usa 0, que podría ser un ID válido o un placeholder para "no asignado").
-    // Si tu API trata `null` para assignee_id como "no asignado", está bien. Si espera que el campo se omita,
-    // necesitarías construir el payload condicionalmente.
-    // El ejemplo de API no incluye creator_id en el payload, asumiendo que el backend lo infiere.
-
-    const payloadToSend: any = {
-      title: issueData.title,
-      description: issueData.description || "", // Asegurar que no sea null
-      status_id: issueData.status_id,
-      issue_type_id: issueData.issue_type_id,
-      severity_id: issueData.severity_id,
-      priority_id: issueData.priority_id,
-      assignee_id: issueData.assignee_id, // Si null es aceptado por el backend para "no asignado"
-      deadline: issueData.deadline || null, // Enviar null si no hay fecha
-      watcher_ids: issueData.watcher_ids && issueData.watcher_ids.length > 0 ? issueData.watcher_ids : [] // Enviar array vacío si no hay watchers
-    };
-
-    // Limpiar propiedades nulas si el backend no las quiere (excepto deadline y assignee_id que podrían ser null explícitamente)
-    // Por ejemplo, si status_id es obligatorio y no puede ser null:
-    if (payloadToSend.status_id === null) {
-      // Manejar error o no enviar, dependiendo de los requisitos de tu API.
-      // Por ahora, lo dejamos tal cual asumiendo que el form lo valida.
-      console.warn("status_id is null, backend might require it.");
+  createIssue(issueData: NewIssueFormData): Observable<Issue> {
+    const headers = this.createAuthHeaders();
+    const payload: any = {};
+    for (const key in issueData) {
+      if (Object.prototype.hasOwnProperty.call(issueData, key)) {
+        const typedKey = key as keyof NewIssueFormData;
+        // Ensure that null values for optional fields are handled correctly by the backend
+        // or omit them if the backend prefers them absent.
+        if (issueData[typedKey] !== undefined) { // Send if not undefined
+            payload[typedKey] = issueData[typedKey];
+        }
+      }
     }
-    // Similar para type, severity, priority.
+    if (!payload.watcher_ids) { // Ensure watcher_ids is an array if not provided or undefined
+        payload.watcher_ids = [];
+    }
 
-    // Si assignee_id: 0 significa "no asignado" y tu API no acepta null:
-    // if (payloadToSend.assignee_id === null) {
-    //   payloadToSend.assignee_id = 0; // O elimina la propiedad si es el caso
-    // }
-
-
-    console.log('IssueService: Payload for POST request:', payloadToSend);
-    return this.http.post<Issue>(`${this.issuesApiBaseUrl}/`, payloadToSend).pipe(
-      tap(createdIssue => console.log('IssueService: Issue created successfully via API. Response:', createdIssue)),
+    return this.http.post<Issue>(`${this.API_BASE_URL}/issues/`, payload, { headers }).pipe(
       catchError(this.handleError)
     );
   }
 
   updateIssue(issueId: string | number, payload: IssueUpdatePayload): Observable<Issue> {
-    const url = `${this.issuesApiBaseUrl}/${issueId}/`; // Consistencia con la barra final si el backend la espera
-    console.log(`IssueService: Updating issue ${issueId} with payload to API: ${url}`, payload);
-    return this.http.patch<Issue>(url, payload).pipe(
-      tap(updatedIssue => console.log('IssueService: Issue updated successfully via API', updatedIssue)),
+    const headers = this.createAuthHeaders();
+    const url = `${this.API_BASE_URL}/issues/${issueId}/`;
+    // Filter out undefined properties from payload before sending PATCH
+    const filteredPayload = Object.entries(payload).reduce((acc, [key, value]) => {
+        if (value !== undefined) {
+            (acc as any)[key] = value;
+        }
+        return acc;
+    }, {} as IssueUpdatePayload);
+
+    return this.http.patch<Issue>(url, filteredPayload, { headers }).pipe(
       catchError(this.handleError)
     );
   }
 
   addAttachment(issueId: number, file: File): Observable<AttachmentDetail> {
-    console.log(`IssueService: Adding attachment "${file.name}" for issue ID ${issueId} via API`);
+    const headers = this.createAuthHeaders();
     const formData = new FormData();
     formData.append('file', file, file.name);
-    // El endpoint para adjuntos podría ser /api/v1/issues/{issueId}/attachments/
-    return this.http.post<AttachmentDetail>(`${this.issuesApiBaseUrl}/${issueId}/attachments/`, formData).pipe(
-      tap(attachment => console.log('IssueService: Attachment added via API', attachment)),
+    formData.append('issue', String(issueId));
+    return this.http.post<AttachmentDetail>(`${this.API_BASE_URL}/attachments/`, formData, { headers }).pipe(
       catchError(this.handleError)
     );
   }
 
-  deleteAttachment(issueId: number, attachmentId: number): Observable<void> {
-    console.log(`IssueService: Deleting attachment ID ${attachmentId} from issue ID ${issueId} via API`);
-    return this.http.delete<void>(`${this.issuesApiBaseUrl}/${issueId}/attachments/${attachmentId}/`).pipe(
-      tap(() => console.log(`IssueService: Attachment ${attachmentId} deleted via API`)),
+  deleteAttachment(attachmentId: number): Observable<void> { // Corrected: only one argument
+    const headers = this.createAuthHeaders();
+    return this.http.delete<void>(`${this.API_BASE_URL}/attachments/${attachmentId}/`, { headers }).pipe(
+      catchError(this.handleError)
+    );
+  }
+
+  addComment(issueId: number, text: string): Observable<CommentDetail> {
+    const headers = this.createAuthHeaders();
+    const payload = { issue: issueId, text: text };
+    return this.http.post<CommentDetail>(`${this.API_BASE_URL}/comments/`, payload, { headers }).pipe(
+      catchError(this.handleError)
+    );
+  }
+  
+  deleteIssue(issueId: string | number): Observable<void> {
+    const headers = this.createAuthHeaders();
+    return this.http.delete<void>(`${this.API_BASE_URL}/issues/${issueId}/`, { headers }).pipe(
       catchError(this.handleError)
     );
   }
 
   getProjectUsers(): Observable<UserLite[]> {
-    console.log('IssueService: Fetching project users from API');
-    return this.http.get<UserLite[]>(`${this.generalApiBaseUrl}/users/`).pipe(
-      tap(users => console.log('IssueService: Fetched project users via API', users)),
-      catchError(this.handleError)
+     const headers = this.createAuthHeaders();
+    return this.http.get<UserLite[]>(`${this.API_BASE_URL}/users/`, { headers }).pipe(
+       catchError(this.handleError)
+    );
+  }
+  
+  getCurrentUserFromAccountService(): Observable<UserLite | null> {
+    return this.accountService.currentUserProfile$.pipe(
+      map((userProfileData: UserProfileData | null) => {
+        if (!userProfileData) return null;
+        return {
+          id: userProfileData.id,
+          username: userProfileData.username,
+          first_name: userProfileData.first_name,
+          last_name: userProfileData.last_name,
+          avatar_url: userProfileData.profile?.avatar_url || null
+        };
+      })
     );
   }
 
-  getCurrentUser(): Observable<UserLite> {
-    console.log('IssueService: Fetching current user from API');
-    return this.http.get<UserLite>(`${this.generalApiBaseUrl}/me/`).pipe(
-      tap(user => console.log('IssueService: Fetched current user via API', user)),
-      catchError(this.handleError)
-    );
-  }
-
-  deleteIssue(issueId: string | number): Observable<void> {
-    console.log(`IssueService: Deleting issue ${issueId} via API`);
-    return this.http.delete<void>(`${this.issuesApiBaseUrl}/${issueId}/`).pipe(
-      tap(() => console.log(`IssueService: Issue ${issueId} deleted successfully via API`)),
+  bulkCreateIssues(issuesPayload: Partial<NewIssueFormData>[]): Observable<Issue[]> {
+    const headers = this.createAuthHeaders();
+    return this.http.post<Issue[]>(`${this.API_BASE_URL}/issues/bulk_create/`, issuesPayload, { headers }).pipe(
       catchError(this.handleError)
     );
   }
 
   private handleError(error: HttpErrorResponse): Observable<never> {
-    let errorMessage = 'An unknown error occurred!';
-    if (error.error instanceof ErrorEvent) {
-      errorMessage = `Client-side error: ${error.error.message}`;
-    } else {
-      errorMessage = `Error Code: ${error.status}\nMessage: ${error.message || 'Server error'}`;
-      if (error.error && typeof error.error === 'object') {
-        errorMessage += `\nDetails: ${JSON.stringify(error.error)}`;
-      } else if (typeof error.error === 'string') {
-        errorMessage += `\nDetails: ${error.error}`;
-      }
+    let errorMessage = 'An API error occurred!';
+    if (error.error) {
+        if (typeof error.error === 'string') {
+            errorMessage = error.error;
+        } else if (typeof error.error === 'object') {
+            if ((error.error as any).detail) {
+                errorMessage = (error.error as any).detail;
+            } else if (Array.isArray(error.error) && error.error.length > 0 && typeof error.error[0] === 'string') {
+                errorMessage = error.error[0];
+            } else {
+                try {
+                    const messages = Object.values(error.error).flat().join(' ');
+                    if (messages) errorMessage = messages;
+                } catch (e) {
+                    // If error.error is not an object that can be processed this way
+                    errorMessage = 'Complex error object received.';
+                }
+            }
+        }
+    } else if (error.message) {
+        errorMessage = error.message;
     }
-    console.error('API Error in IssueService:', errorMessage, '\nFull Error:', error);
-    return throwError(() => new Error('Something bad happened with the API; please try again later. Reported: ' + errorMessage ));
+
+    console.error(`IssueService API Error (Status ${error.status}): ${errorMessage}`, error);
+    return throwError(() => new Error(errorMessage || 'An unknown API error occurred.'));
   }
 }

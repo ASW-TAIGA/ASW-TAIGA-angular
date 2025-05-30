@@ -1,18 +1,18 @@
-<div class="w-96 bg-gray-100 rounded-lg shadow p-6 space-y-6 h-full flex flex-col" *ngIf="editableIssue && currentUser">
+<div class="w-full bg-gray-100 rounded-lg shadow p-6 space-y-6 h-full flex flex-col" *ngIf="issue && currentUser">
   <div class="flex items-center justify-between">
-    <h2 class="text-xl font-bold text-gray-900">{{ editableIssue.status.is_closed ? 'CLOSED' : 'OPEN' }}</h2>
+    <h2 class="text-xl font-bold text-gray-900">{{ issue.status.is_closed ? 'CLOSED' : 'OPEN' }}</h2>
     <div class="relative">
       <button
         class="bg-green-600 text-white text-sm font-semibold px-3 py-1.5 rounded flex items-center cursor-pointer justify-start hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
         (click)="toggleDropdown('status', $event); $event.stopPropagation()"
         tabindex="0">
-        {{ editableIssue.status.name || 'Change' }}
+        {{ issue.status.name || 'Change' }}
         <span class="ml-1">▼</span>
       </button>
       <div *ngIf="dropdown.status" class="absolute right-0 mt-1 bg-white border rounded shadow z-20 min-w-full">
         <div *ngFor="let opt of statusOptions" (click)="selectOption('status', opt, $event); $event.stopPropagation()"
              class="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-             [class.font-bold]="editableIssue.status && opt.id === editableIssue.status.id">
+             [class.font-bold]="issue.status && opt.id === issue.status.id">
           {{ opt.name }}
         </div>
       </div>
@@ -27,15 +27,15 @@
         tabindex="0">
         <span class="text-gray-500">type</span>
         <span class="flex items-center">
-          <span class="font-medium">{{ editableIssue.issue_type.name || 'N/A' }}</span>
-          <span class="w-3 h-3 rounded-full ml-2" [ngClass]="editableIssue.issue_type.color"></span>
+          <span class="font-medium">{{ issue.issue_type.name || 'N/A' }}</span>
+          <span class="w-3 h-3 rounded-full ml-2" [style.background-color]="issue.issue_type.color || '#ccc'"></span>
         </span>
       </button>
       <div *ngIf="dropdown.issue_type" class="absolute right-0 top-10 bg-white border rounded shadow z-10 min-w-max inline-block"
            (click)="$event.stopPropagation()">
         <div *ngFor="let opt of typeOptions" (click)="selectOption('issue_type', opt, $event); $event.stopPropagation()"
              class="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-             [class.font-bold]="editableIssue.issue_type && opt.id === editableIssue.issue_type.id">
+             [class.font-bold]="issue.issue_type && opt.id === issue.issue_type.id">
           {{ opt.name }}
         </div>
       </div>
@@ -47,15 +47,15 @@
         tabindex="0">
         <span class="text-gray-500">severity</span>
         <span class="flex items-center">
-          <span class="font-medium">{{ editableIssue.severity.name || 'N/A' }}</span>
-          <span class="w-3 h-3 rounded-full ml-2" [ngClass]="editableIssue.severity.color"></span>
+          <span class="font-medium">{{ issue.severity.name || 'N/A' }}</span>
+           <span class="w-3 h-3 rounded-full ml-2" [style.background-color]="issue.severity.color || '#ccc'"></span>
         </span>
       </button>
       <div *ngIf="dropdown.severity" class="absolute right-0 top-10 bg-white border rounded shadow z-10 min-w-max inline-block"
            (click)="$event.stopPropagation()">
         <div *ngFor="let opt of severityOptions" (click)="selectOption('severity', opt, $event); $event.stopPropagation()"
              class="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-             [class.font-bold]="editableIssue.severity && opt.id === editableIssue.severity.id">
+             [class.font-bold]="issue.severity && opt.id === issue.severity.id">
           {{ opt.name }}
         </div>
       </div>
@@ -67,15 +67,15 @@
         tabindex="0">
         <span class="text-gray-500">priority</span>
         <span class="flex items-center">
-          <span class="font-medium">{{ editableIssue.priority.name || 'N/A' }}</span>
-          <span class="w-3 h-3 rounded-full ml-2" [ngClass]="editableIssue.priority.color"></span>
+          <span class="font-medium">{{ issue.priority.name || 'N/A' }}</span>
+          <span class="w-3 h-3 rounded-full ml-2" [style.background-color]="issue.priority.color || '#ccc'"></span>
         </span>
       </button>
       <div *ngIf="dropdown.priority" class="absolute right-0 top-10 bg-white border rounded shadow z-10 min-w-max inline-block"
            (click)="$event.stopPropagation()">
         <div *ngFor="let opt of priorityOptions" (click)="selectOption('priority', opt, $event); $event.stopPropagation()"
              class="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-             [class.font-bold]="editableIssue.priority && opt.id === editableIssue.priority.id">
+             [class.font-bold]="issue.priority && opt.id === issue.priority.id">
           {{ opt.name }}
         </div>
       </div>
@@ -87,7 +87,7 @@
   <app-user-management
     *ngIf="currentUser"
     title="Assigned"
-    [selectedUsers]="editableIssue.assignee ? [editableIssue.assignee] : []"
+    [selectedUsers]="issue.assignee ? [issue.assignee] : []"
     [allProjectUsers]="allProjectUsers"
     [currentUser]="currentUser"
     addMeText="Assign to me"
@@ -104,7 +104,7 @@
   <app-user-management
     *ngIf="currentUser"
     title="Watchers"
-    [selectedUsers]="editableIssue.watchers || []"
+    [selectedUsers]="issue.watchers || []"
     [allProjectUsers]="allProjectUsers"
     [currentUser]="currentUser"
     addMeText="Watch"
@@ -123,23 +123,23 @@
         <button title="Time"
                 class="p-2 rounded cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-green-500"
                 [ngClass]="{
-                  'bg-orange-500 hover:bg-orange-600 text-white': !!editableIssue.deadline,
-                  'text-green-600 hover:text-green-700 hover:bg-gray-200': !editableIssue.deadline
+                  'bg-orange-500 hover:bg-orange-600 text-white': !!issue.deadline,
+                  'text-green-600 hover:text-green-700 hover:bg-gray-200': !issue.deadline
                 }"
-                (click)="showDatePicker = !showDatePicker">
+                (click)="showDatePicker = !showDatePicker; $event.stopPropagation()">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
           </svg>
         </button>
-        <div *ngIf="showDatePicker" class="absolute left-0 bottom-full mb-2 bg-white border rounded shadow p-2 z-30">
+        <div *ngIf="showDatePicker" class="absolute left-0 bottom-full mb-2 bg-white border rounded shadow p-2 z-30" (click)="$event.stopPropagation()">
           <input
             type="date"
             class="border rounded px-2 py-1 text-sm"
-            [value]="editableIssue.deadline || ''"
+            [value]="issue.deadline | date:'yyyy-MM-dd'"
             (change)="handleDateInputChange($event)" />
-          <button *ngIf="editableIssue.deadline"
+          <button *ngIf="issue.deadline"
                   class="ml-2 text-red-500 text-xs underline"
-                  (click)="removeDeadline()">Eliminar</button>
+                  (click)="removeDeadline()">Remove</button>
         </div>
       </div>
       <button title="Delete"
@@ -152,6 +152,12 @@
     </div>
   </div>
 </div>
-<div *ngIf="!editableIssue || !currentUser">
-  Loading sidebar...
+<div *ngIf="!issue || !currentUser" class="p-6 text-center text-gray-400 italic flex items-center justify-center h-full">
+  <div>
+    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+    </svg>
+    <h3 class="mt-2 text-sm font-medium text-gray-900">Sidebar Not Available</h3>
+    <p class="mt-1 text-sm text-gray-500">Issue data or user context is missing.</p>
+  </div>
 </div>
